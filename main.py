@@ -1,13 +1,13 @@
 import streamlit as st
 from PIL import Image
-import io
 import os
 from fpdf import FPDF
 import datetime
 
+# ---------------- Utilities ----------------
+
 
 def _ensure_bytes(data):
-    # fpdf2 may return bytes or bytearray; fpdf v1 returns str (latin-1)
     if isinstance(data, bytes):
         return data
     if isinstance(data, bytearray):
@@ -19,7 +19,23 @@ def _ensure_bytes(data):
     return bytes(data)
 
 
-# -- CONFIG --
+def sanitize(text):
+    if not isinstance(text, str):
+        return text
+    return (
+        text.replace("–", "-")
+            .replace("—", "-")
+            .replace("“", "\"")
+            .replace("”", "\"")
+            .replace("’", "'")
+            .replace("↓", "Down")
+            .replace("↑", "Up")
+            .encode("latin-1", errors="ignore")
+            .decode("latin-1")
+    )
+
+
+# ---------------- App Config ----------------
 EQUIPMENT_CATALOG = {
     "TiDel": {
         "D3 w/Storage Vault": {
@@ -130,58 +146,155 @@ power = st.radio(
     "Is there a power outlet within 4 feet of the unit?", ["Yes", "No"])
 install_notes = st.text_area("Describe the installation and include any notes")
 
-
-def sanitize(text):
-    if not isinstance(text, str):
-        return text
-    return (
-        text.replace("–", "-")
-            .replace("—", "-")
-            .replace("“", "\"")
-            .replace("”", "\"")
-            .replace("’", "'")
-            .replace("↓", "Down")
-            .replace("↑", "Up")
-            .encode("latin-1", errors="ignore")
-            .decode("latin-1")
-    )
-
-# ---------------- PDF HELPERS (Centered layout) ----------------
+# ---------------- PDF Helpers (Pro look: centered headers, left-aligned content) ----------------
+GRAY = (230, 230, 230)
+DARK = (60, 60, 60)
+LIGHT = (120, 120, 120)
+LINE_GRAY = (200, 200, 200)
 
 
-def section_header(pdf: FPDF, title: str):
-    pdf.ln(4)
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, txt=sanitize(title), ln=True, align="C")
-    pdf.set_font("Arial", size=12)
+def set_text_color(pdf, rgb):
+    r, g, b = rgb
+    pdf.set_text_color(r, g, b)
 
 
-def one_col_row(pdf: FPDF, label: str, value):
-    text = f"{label.rstrip(':')}: {sanitize('' if value is None else str(value))}"
-    pdf.cell(0, 8, txt=sanitize(text), ln=True, align="C")
+def set_fill_color(pdf, rgb):
+    r, g, b = rgb
+    pdf.set_fill_color(r, g, b)
 
 
-def two_col_row(pdf: FPDF, l1: str, v1, l2: str, v2):
-    left = f"{l1.rstrip(':')}: {sanitize('' if v1 is None else str(v1))}"
-    right = f"{l2.rstrip(':')}: {sanitize('' if v2 is None else str(v2))}"
-    pdf.cell(0, 8, txt=sanitize(f"{left}     {right}"), ln=True, align="C")
+def draw_hr(pdf, y=None, thickness=0.3):
+    if y is not None:
+        pdf.set_y(y)
+    x1 = pdf.l_margin
+    x2 = pdf.w - pdf.r_margin
+    y = pdf.get_y()
+    r, g, b = LINE_GRAY
+    pdf.set_draw_color(r, g, b)
+    pdf.set_line_width(thickness)
+    pdf.line(x1, y, x2, y)
+    pdf.ln(3)
+
+
+def page_title(pdf, title, date_str):
+    pdf.set_font("Arial", "B", 18)
+    set_text_color(pdf, DARK)
+    pdf.cell(0, 12, txt=sanitize(title), ln=True, align="C")
+    pdf.set_font("Arial", "", 12)
+    set_text_color(pdf, LIGHT)
+    pdf.cell(0, 8, txt=sanitize(date_str), ln=True, align="C")
+    pdf.ln(3)
+    draw_hr(pdf)
+
+
+def section_header(pdf, text):
+    pdf.ln(2)
+    set_fill_color(pdf, GRAY)
+    pdf.set_font("Arial", "B", 13)
+    set_text_color(pdf, DARK)
+    pdf.cell(0, 9, txt=sanitize(text), ln=True, align="L", fill=True)
+    pdf.ln(2)
+
+
+def kv_row(pdf, label, value, w_label=42, height=8):
+    """
+    Safer key/value row:
+    - Resets X if we run out of space on the current line
+    - Uses explicit remaining width (not 0) for multi_cell
+    """
+    # Move to a new line if we're too close to the right margin
+    usable_w = pdf.w - pdf.l_margin - pdf.r_margin
+    # If current X is beyond the left margin (e.g., after a previous cell),
+    # compute remaining width for the value cell.
+    cur_x = pdf.get_x()
+    if cur_x < pdf.l_margin or cur_x > (pdf.w - pdf.r_margin - 1):
+        pdf.ln(height)
+        pdf.set_x(pdf.l_margin)
+
+    # Draw label
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(w_label, height, txt=sanitize(f"{label.rstrip(':')}: "), ln=0)
+
+    # Compute remaining width for the value cell
+    cur_x = pdf.get_x()
+    remaining_w = (pdf.w - pdf.r_margin) - cur_x
+    if remaining_w <= 1:
+        # No space left on this line; wrap to a new line and use full width
+        pdf.ln(height)
+        pdf.set_x(pdf.l_margin)
+        remaining_w = usable_w
+
+    # Draw value as a multi_cell with explicit width
+    pdf.set_font("Arial", "", 12)
+    pdf.set_text_color(0, 0, 0)
+    txt = "" if value is None else str(value)
+    pdf.multi_cell(remaining_w, height, sanitize(txt))
+
+
+def kv_row_two_col(pdf, l1, v1, l2, v2, w_label=28, w_value=60, height=8, gap=6):
+    # Left column
+    pdf.set_font("Arial", "B", 12)
+    set_text_color(pdf, DARK)
+    pdf.cell(w_label, height, txt=sanitize(f"{l1.rstrip(':')}:"))
+    pdf.set_font("Arial", "", 12)
+    set_text_color(pdf, (0, 0, 0))
+    pdf.cell(w_value, height, txt=sanitize(
+        "" if v1 is None else str(v1)), ln=0)
+
+    # Gap
+    pdf.cell(gap, height, txt="")
+
+    # Right column
+    pdf.set_font("Arial", "B", 12)
+    set_text_color(pdf, DARK)
+    pdf.cell(w_label, height, txt=sanitize(f"{l2.rstrip(':')}:"))
+    pdf.set_font("Arial", "", 12)
+    set_text_color(pdf, (0, 0, 0))
+    pdf.cell(w_value, height, txt=sanitize(
+        "" if v2 is None else str(v2)), ln=1)
+
+
+def para(pdf, label, text, height=7):
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, height, txt=sanitize(f"{label.rstrip(':')}: "), ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.set_text_color(0, 0, 0)
+    usable_w = pdf.w - pdf.l_margin - pdf.r_margin
+    pdf.multi_cell(usable_w, height, sanitize(
+        "" if text is None else str(text)))
+    pdf.ln(1)
+
+
+def hours_table(pdf, hours_dict):
+    # Header
+    set_fill_color(pdf, GRAY)
+    set_text_color(pdf, DARK)
+    pdf.set_font("Arial", "B", 12)
+    day_w, open_w, close_w = 40, 35, 35
+    pdf.cell(day_w, 8, "Day", border=0, fill=True)
+    pdf.cell(open_w, 8, "Open", border=0, fill=True)
+    pdf.cell(close_w, 8, "Close", border=0, fill=True, ln=1)
+    # Rows
+    pdf.set_font("Arial", "", 12)
+    set_text_color(pdf, (0, 0, 0))
+    for day, (open_t, close_t) in hours_dict.items():
+        o = "" if open_t is None else str(open_t)
+        c = "" if close_t is None else str(close_t)
+        pdf.cell(day_w, 8, sanitize(day))
+        pdf.cell(open_w, 8, sanitize(o))
+        pdf.cell(close_w, 8, sanitize(c), ln=1)
 
 
 def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None, y_top: float = None):
-    """
-    Centers an image within the page while preserving aspect ratio.
-    If max_w/h omitted, they respect page margins.
-    Returns (draw_w, draw_h).
-    """
     if not os.path.exists(path):
-        return 0, 0
-
+        return (0, 0)
     with Image.open(path) as img:
         w_img, h_img = img.size
 
     page_w, page_h = pdf.w, pdf.h
-    left_margin = pdf.l_margin
-    right_margin = pdf.r_margin
+    left_margin, right_margin = pdf.l_margin, pdf.r_margin
     usable_w = page_w - left_margin - right_margin
 
     if max_w is None:
@@ -189,17 +302,11 @@ def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None,
     if max_h is None:
         max_h = page_h - pdf.t_margin - pdf.b_margin - 10
 
-    scale_w = max_w / w_img
-    scale_h = max_h / h_img
-    scale = min(scale_w, scale_h)
-
-    draw_w = w_img * scale
-    draw_h = h_img * scale
+    scale = min(max_w / w_img, max_h / h_img)
+    draw_w, draw_h = w_img * scale, h_img * scale
 
     if y_top is None:
         y_top = pdf.get_y()
-
-    # If remaining space is too small, move to next page
     if y_top + draw_h > (page_h - pdf.b_margin):
         pdf.add_page()
         y_top = pdf.get_y()
@@ -207,97 +314,95 @@ def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None,
     x = (page_w - draw_w) / 2.0
     pdf.image(path, x=x, y=y_top, w=draw_w, h=draw_h)
     pdf.ln(draw_h + 4)
-    return draw_w, draw_h
+    return (draw_w, draw_h)
 
 
-# ---------------- SUBMIT ----------------
+# ---------------- Submit -> Build PDF ----------------
 if st.button("✅ Submit Survey"):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Title & date (centered)
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 12, txt=sanitize("Site Survey Report"), ln=True, align="C")
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 8, txt=sanitize(
-        f"Date: {datetime.date.today()}"), ln=True, align="C")
-    pdf.ln(5)
+    # Title block (centered), divider, then content left-aligned
+    page_title(pdf, "Site Survey Report", f"Date: {datetime.date.today()}")
 
-    # Centered model image
+    # Equipment image (centered but modest)
     try:
         if os.path.exists(image_path):
-            center_image(pdf, image_path, max_w=120)  # nice header size
+            center_image(pdf, image_path, max_w=120)
     except Exception:
         pass
 
-    # Sections
+    # Equipment Info
     section_header(pdf, "Equipment Info")
     dims = f"{model_info['width']} x {model_info['depth']} x {model_info['height']}"
-    two_col_row(pdf, "Make", make, "Model", model)
-    two_col_row(pdf, "Weight", model_info.get(
+    kv_row_two_col(pdf, "Make", make, "Model", model)
+    kv_row_two_col(pdf, "Weight", model_info.get(
         "weight", ""), "Dimensions", dims)
+    pdf.ln(2)
+    draw_hr(pdf)
 
+    # Contact Info
     section_header(pdf, "Contact Info")
-    one_col_row(pdf, "Company", company)
-    one_col_row(pdf, "Contact", contact)
-    one_col_row(pdf, "Address", address)
-    one_col_row(pdf, "Phone", phone)
-    one_col_row(pdf, "Email", email)
+    kv_row(pdf, "Company", company)
+    kv_row(pdf, "Contact", contact)
+    kv_row(pdf, "Address", address)
+    kv_row(pdf, "Phone", phone)
+    kv_row(pdf, "Email", email)
+    pdf.ln(2)
+    draw_hr(pdf)
 
+    # Hours of Operation
     section_header(pdf, "Hours of Operation")
-    for day, times in hours.items():
-        open_t = "" if times[0] is None else str(times[0])
-        close_t = "" if times[1] is None else str(times[1])
-        pdf.cell(0, 8, txt=sanitize(
-            f"{day}: {open_t} - {close_t}"), ln=1, align="C")
+    hours_table(pdf, hours)
+    pdf.ln(2)
+    draw_hr(pdf)
 
+    # Delivery Instructions
     section_header(pdf, "Delivery Instructions")
-    one_col_row(pdf, "Days Prior", days_prior)
-    one_col_row(pdf, "Storage Space", storage_space)
-    one_col_row(pdf, "Loading Dock", loading_dock)
-    one_col_row(pdf, "Delivery Hours", delivery_hours)
-    one_col_row(pdf, "Location", delivery_loc)
+    kv_row(pdf, "Days Prior", days_prior)
+    kv_row(pdf, "Storage Space", storage_space)
+    kv_row(pdf, "Loading Dock", loading_dock)
+    kv_row(pdf, "Delivery Hours", delivery_hours)
+    kv_row(pdf, "Location", delivery_loc)
 
     if path_desc:
-        pdf.cell(0, 8, txt=sanitize("Path:"), ln=1, align="C")
-        pdf.multi_cell(0, 8, sanitize(path_desc), align="C")
+        para(pdf, "Path", path_desc)
     if staircase_notes:
-        pdf.cell(0, 8, txt=sanitize("Stairs:"), ln=1, align="C")
-        pdf.multi_cell(0, 8, sanitize(staircase_notes), align="C")
+        para(pdf, "Stairs", staircase_notes)
     if elevator_notes:
-        pdf.cell(0, 8, txt=sanitize("Elevators:"), ln=1, align="C")
-        pdf.multi_cell(0, 8, sanitize(elevator_notes), align="C")
+        para(pdf, "Elevators", elevator_notes)
     if delivery_notes:
-        pdf.cell(0, 8, txt=sanitize("Other Notes:"), ln=1, align="C")
-        pdf.multi_cell(0, 8, sanitize(delivery_notes), align="C")
+        para(pdf, "Other Notes", delivery_notes)
+    pdf.ln(2)
+    draw_hr(pdf)
 
+    # Installation Details
     section_header(pdf, "Installation Details")
-    one_col_row(pdf, "Floor Scan", floor_scan)
-    one_col_row(pdf, "Speedtest", f"{download_speed} Down / {upload_speed} Up")
-    one_col_row(pdf, "Door Size", door_size)
-    one_col_row(pdf, "Room Size", room_size)
-    one_col_row(pdf, "Space Available", sufficient_space)
-    two_col_row(pdf, "Floor", floor_type, "Other Floor Type", other_floor_type)
-    two_col_row(pdf, "Other Safe", other_safe, "Type", safe_type)
-    two_col_row(pdf, "Network", network, "Distance", network_distance)
-    two_col_row(pdf, "Water Distance", water_distance, "Power Nearby", power)
-    if install_notes:
-        pdf.cell(0, 8, txt=sanitize("Notes:"), ln=1, align="C")
-        pdf.multi_cell(0, 8, sanitize(install_notes), align="C")
+    kv_row(pdf, "Floor Scan", floor_scan)
+    kv_row(pdf, "Speedtest", f"{download_speed} Down / {upload_speed} Up")
+    kv_row(pdf, "Door Size", door_size)
+    kv_row(pdf, "Room Size", room_size)
+    kv_row(pdf, "Space Available", sufficient_space)
+    kv_row_two_col(pdf, "Floor", floor_type,
+                   "Other Floor Type", other_floor_type)
+    kv_row_two_col(pdf, "Other Safe", other_safe, "Type", safe_type)
+    kv_row_two_col(pdf, "Network", network, "Distance", network_distance)
+    kv_row_two_col(pdf, "Water Distance",
+                   water_distance, "Power Nearby", power)
 
-    # Photos: one per page, centered and fit-to-page
+    if install_notes:
+        para(pdf, "Notes", install_notes)
+
+    # Photos: one per page, with a centered image and left-aligned caption
     if photos:
-        for i, photo in enumerate(photos[:20]):
+        for photo in photos[:20]:
             temp_path = None
             try:
                 pdf.add_page()
-                pdf.set_font("Arial", "B", 14)
-                pdf.cell(0, 10, txt=sanitize(
-                    "Site Survey Photo"), ln=True, align="C")
-                pdf.ln(3)
+                section_header(pdf, "Site Survey Photo")
 
-                # Convert to RGB -> temp JPEG (fpdf likes JPEG best)
+                # Convert for FPDF
                 img = Image.open(photo).convert("RGB")
                 temp_path = f"temp_{photo.name}.jpg"
                 img.save(temp_path, format="JPEG")
@@ -308,23 +413,27 @@ if st.button("✅ Submit Survey"):
                 max_h = pdf.h - y_top - pdf.b_margin - 5
                 center_image(pdf, temp_path, max_w=max_w,
                              max_h=max_h, y_top=y_top)
+
             except Exception:
+                pdf.set_font("Arial", "B", 12)
+                set_text_color(pdf, (200, 0, 0))
                 pdf.cell(0, 8, txt=sanitize(
-                    f"Error displaying image {photo.name}"), ln=1, align="C")
+                    f"Error displaying image {photo.name}"), ln=1)
             finally:
                 if temp_path and os.path.exists(temp_path):
                     os.remove(temp_path)
 
-    # Footer (centered)
-    pdf.set_y(-15)
+    # Footer line + centered footer text
+    pdf.set_y(-18)
+    draw_hr(pdf, thickness=0.2)
     pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 10, txt=sanitize(
+    set_text_color(pdf, (90, 90, 90))
+    pdf.cell(0, 8, txt=sanitize(
         "Generated by Site Survey App - Version 1.0 - © 2025"), align="C")
 
     # Streamlit download
     _out = pdf.output(dest="S")
     pdf_bytes = _ensure_bytes(_out)
-
     st.success("Survey submitted successfully! PDF is ready below.")
     st.download_button(
         label="📄 Download PDF Report",
