@@ -1,38 +1,40 @@
+import os
+import datetime
+from io import BytesIO
+
 import streamlit as st
 from PIL import Image
-import os
 from fpdf import FPDF
-import datetime
+from fpdf.enums import XPos, YPos
+from questions import FORM_DEFINITION
+from form_renderer import apply_overrides, render_section
 
 # ---------------- Utilities ----------------
 
 
-def _ensure_bytes(data):
-    if isinstance(data, bytes):
-        return data
-    if isinstance(data, bytearray):
-        return bytes(data)
-    if isinstance(data, memoryview):
-        return data.tobytes()
-    if isinstance(data, str):
-        return data.encode("latin-1")
-    return bytes(data)
-
-
 def sanitize(text):
     if not isinstance(text, str):
-        return text
+        text = "" if text is None else str(text)
     return (
         text.replace("–", "-")
             .replace("—", "-")
             .replace("“", "\"")
             .replace("”", "\"")
             .replace("’", "'")
-            .replace("↓", "Down")
-            .replace("↑", "Up")
             .encode("latin-1", errors="ignore")
             .decode("latin-1")
     )
+
+
+def fmt_time(t):
+    """Return HH:MM (no seconds) or '' if None/empty."""
+    if not t:
+        return ""
+    try:
+        return t.strftime("%H:%M")
+    except Exception:
+        s = str(t)
+        return s[:5] if len(s) >= 5 else s
 
 
 # ---------------- App Config ----------------
@@ -69,7 +71,11 @@ st.markdown(f"**Depth:** {model_info['depth']}")
 st.markdown(f"**Height:** {model_info['height']}")
 image_path = os.path.join("images", model_info["photo"])
 if os.path.exists(image_path):
-    st.image(image_path, caption=f"{make} {model}", width=600)
+    st.image(image_path, caption=f"{make} {model}", width=480)
+
+# Prepare data-driven sections and answers store
+sections_used = apply_overrides(FORM_DEFINITION, make, model)
+answers = {}
 
 # --- Upload Site Photos ---
 st.subheader("2. Upload Site Photos")
@@ -78,19 +84,19 @@ photos = st.file_uploader(
     type=["jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
+answers["photos"] = photos
 if photos:
     for photo in photos[:20]:
-        st.image(photo, caption=photo.name, width=150)
+        st.image(photo, caption=photo.name, width=140)
 
 # --- Contact Info ---
 st.subheader("3. Contact Information")
-company = st.text_input("Company Name")
-contact = st.text_input("Contact Name")
-address = st.text_input("Address")
-phone = st.text_input("Contact Phone #")
-email = st.text_input("Contact Email")
+for _sec in sections_used:
+    if _sec.get("title") == "Contact Information":
+        render_section(_sec, answers)
+        break
 
-# --- Days and Hours of Operation ---
+# --- Hours of Operation ---
 st.subheader("4. Hours of Operation")
 days = ["Monday", "Tuesday", "Wednesday",
         "Thursday", "Friday", "Saturday", "Sunday"]
@@ -104,53 +110,33 @@ for day in days:
     with cols[2]:
         close_time = st.time_input(f"Close {day}", key=f"close_{day}")
     hours[day] = (open_time, close_time)
+answers["hours"] = hours
 
 # --- Delivery Instructions ---
 st.subheader("5. Delivery Instructions")
-days_prior = st.text_input(
-    "How many days prior to installation can the safe be delivered?")
-storage_space = st.radio(
-    "Is there space to store the Tidel safe?", ["Yes", "No"])
-loading_dock = st.radio("Is there a loading dock?", ["Yes", "No"])
-delivery_hours = st.text_input("Delivery Hours")
-delivery_loc = st.radio("Delivery Location", [
-                        "Front of store", "Back of store"])
-path_desc = st.text_area(
-    "Describe the equipment path from the entry point to the final location")
-use_dolly = st.radio(
-    "Can a dolly be used to move the equipment?", ["Yes", "No"])
-staircase_notes = st.text_area(
-    "Describe door sizes, staircases (steps, turns, landings), etc.")
-elevator_notes = st.text_area("Elevators (capacity, door size, dimensions)")
-delivery_notes = st.text_area("Additional delivery instructions or comments")
+for _sec in sections_used:
+    if _sec.get("title") == "Delivery Instructions":
+        render_section(_sec, answers)
+        break
 
 # --- Installation Location ---
 st.subheader("6. Installation Location")
-floor_scan = st.radio("Is a Floor Scan required?", ["Yes", "No"])
-download_speed = st.text_input("Speedtest Download (turn off 5G, use Bell)")
-upload_speed = st.text_input("Speedtest Upload")
-door_size = st.text_input("Door size")
-room_size = st.text_input("Room size (Length x Width x Height)")
-sufficient_space = st.radio(
-    "Is there sufficient space for the safe? (Need 30 inches height)", ["Yes", "No"])
-floor_type = st.radio("Floor/Subfloor type",
-                      ["Concrete", "Wood", "Raised floor", "Other"])
-other_floor_type = st.text_input("Other floor type (if applicable)")
-other_safe = st.radio("Is there another safe in the same room?", ["Yes", "No"])
-safe_type = st.text_input("If yes, what kind?")
-network = st.radio("Is there a network connection available?", ["Yes", "No"])
-network_distance = st.text_input("If yes, how far from the install location?")
-water_distance = st.radio(
-    "Is the safe being installed 6 feet away from water?", ["Yes", "No"])
-power = st.radio(
-    "Is there a power outlet within 4 feet of the unit?", ["Yes", "No"])
-install_notes = st.text_area("Describe the installation and include any notes")
+for _sec in sections_used:
+    if _sec.get("title") == "Installation Location":
+        render_section(_sec, answers)
+        break
 
-# ---------------- PDF Helpers (Pro look: centered headers, left-aligned content) ----------------
+# ---------------- PDF Helpers ----------------
 GRAY = (230, 230, 230)
 DARK = (60, 60, 60)
 LIGHT = (120, 120, 120)
 LINE_GRAY = (200, 200, 200)
+
+H_SECTION = 8
+H_ROW = 6.5
+H_TABLE = 7
+SPACE_AFTER_SEC = 1.2
+SPACE_AFTER_BLOCK = 1.2
 
 
 def set_text_color(pdf, rgb):
@@ -163,6 +149,29 @@ def set_fill_color(pdf, rgb):
     pdf.set_fill_color(r, g, b)
 
 
+def usable_width(pdf):
+    return pdf.w - pdf.l_margin - pdf.r_margin
+
+
+def remaining_height(pdf):
+    return (pdf.h - pdf.b_margin) - pdf.get_y()
+
+
+def ensure_space_for(pdf, height_needed: float):
+    if remaining_height(pdf) < height_needed:
+        pdf.add_page()
+
+
+def ensure_space(pdf, needed):
+    if remaining_height(pdf) < needed:
+        pdf.add_page()
+
+
+def ensure_glue(pdf, min_after=22):
+    if remaining_height(pdf) < min_after:
+        pdf.add_page()
+
+
 def draw_hr(pdf, y=None, thickness=0.3):
     if y is not None:
         pdf.set_y(y)
@@ -173,118 +182,71 @@ def draw_hr(pdf, y=None, thickness=0.3):
     pdf.set_draw_color(r, g, b)
     pdf.set_line_width(thickness)
     pdf.line(x1, y, x2, y)
-    pdf.ln(3)
+    pdf.ln(2)
 
 
 def page_title(pdf, title, date_str):
-    pdf.set_font("Arial", "B", 18)
+    pdf.set_font("Helvetica", "B", 17)
     set_text_color(pdf, DARK)
-    pdf.cell(0, 12, txt=sanitize(title), ln=True, align="C")
-    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, text=sanitize(title),
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, LIGHT)
-    pdf.cell(0, 8, txt=sanitize(date_str), ln=True, align="C")
-    pdf.ln(3)
+    pdf.cell(0, 7, text=sanitize(date_str),
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.ln(2)
     draw_hr(pdf)
 
 
 def section_header(pdf, text):
-    pdf.ln(2)
+    ensure_glue(pdf, min_after=24)
     set_fill_color(pdf, GRAY)
-    pdf.set_font("Arial", "B", 13)
     set_text_color(pdf, DARK)
-    pdf.cell(0, 9, txt=sanitize(text), ln=True, align="L", fill=True)
-    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 12.5)
+    pdf.cell(0, H_SECTION, text=sanitize(text), new_x=XPos.LMARGIN,
+             new_y=YPos.NEXT, align="L", fill=True)
+    pdf.ln(SPACE_AFTER_SEC)
 
 
-def kv_row(pdf, label, value, w_label=42, height=8):
-    """
-    Safer key/value row:
-    - Resets X if we run out of space on the current line
-    - Uses explicit remaining width (not 0) for multi_cell
-    """
-    # Move to a new line if we're too close to the right margin
-    usable_w = pdf.w - pdf.l_margin - pdf.r_margin
-    # If current X is beyond the left margin (e.g., after a previous cell),
-    # compute remaining width for the value cell.
-    cur_x = pdf.get_x()
-    if cur_x < pdf.l_margin or cur_x > (pdf.w - pdf.r_margin - 1):
-        pdf.ln(height)
-        pdf.set_x(pdf.l_margin)
-
-    # Draw label
-    pdf.set_font("Arial", "B", 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(w_label, height, txt=sanitize(f"{label.rstrip(':')}: "), ln=0)
-
-    # Compute remaining width for the value cell
-    cur_x = pdf.get_x()
-    remaining_w = (pdf.w - pdf.r_margin) - cur_x
-    if remaining_w <= 1:
-        # No space left on this line; wrap to a new line and use full width
-        pdf.ln(height)
-        pdf.set_x(pdf.l_margin)
-        remaining_w = usable_w
-
-    # Draw value as a multi_cell with explicit width
-    pdf.set_font("Arial", "", 12)
-    pdf.set_text_color(0, 0, 0)
-    txt = "" if value is None else str(value)
-    pdf.multi_cell(remaining_w, height, sanitize(txt))
-
-
-def kv_row_two_col(pdf, l1, v1, l2, v2, w_label=28, w_value=60, height=8, gap=6):
-    # Left column
-    pdf.set_font("Arial", "B", 12)
+def para(pdf, label, text, line_h=H_ROW):
+    ensure_space_for(pdf, line_h * 2)
+    pdf.set_font("Helvetica", "B", 11)
     set_text_color(pdf, DARK)
-    pdf.cell(w_label, height, txt=sanitize(f"{l1.rstrip(':')}:"))
-    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, line_h, text=sanitize(f"{label.rstrip(':')}:"),
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
+    pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, (0, 0, 0))
-    pdf.cell(w_value, height, txt=sanitize(
-        "" if v1 is None else str(v1)), ln=0)
-
-    # Gap
-    pdf.cell(gap, height, txt="")
-
-    # Right column
-    pdf.set_font("Arial", "B", 12)
-    set_text_color(pdf, DARK)
-    pdf.cell(w_label, height, txt=sanitize(f"{l2.rstrip(':')}:"))
-    pdf.set_font("Arial", "", 12)
-    set_text_color(pdf, (0, 0, 0))
-    pdf.cell(w_value, height, txt=sanitize(
-        "" if v2 is None else str(v2)), ln=1)
-
-
-def para(pdf, label, text, height=7):
-    pdf.set_font("Arial", "B", 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, height, txt=sanitize(f"{label.rstrip(':')}: "), ln=True)
-    pdf.set_font("Arial", "", 12)
-    pdf.set_text_color(0, 0, 0)
-    usable_w = pdf.w - pdf.l_margin - pdf.r_margin
-    pdf.multi_cell(usable_w, height, sanitize(
-        "" if text is None else str(text)))
-    pdf.ln(1)
+    pdf.multi_cell(usable_width(pdf), line_h, text=sanitize("" if text is None else str(text)),
+                   new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
 
 
 def hours_table(pdf, hours_dict):
-    # Header
-    set_fill_color(pdf, GRAY)
-    set_text_color(pdf, DARK)
-    pdf.set_font("Arial", "B", 12)
-    day_w, open_w, close_w = 40, 35, 35
-    pdf.cell(day_w, 8, "Day", border=0, fill=True)
-    pdf.cell(open_w, 8, "Open", border=0, fill=True)
-    pdf.cell(close_w, 8, "Close", border=0, fill=True, ln=1)
-    # Rows
-    pdf.set_font("Arial", "", 12)
+    def _header():
+        set_fill_color(pdf, GRAY)
+        set_text_color(pdf, DARK)
+        pdf.set_font("Helvetica", "B", 11)
+        day_w, open_w, close_w = 40, 35, 35
+        pdf.cell(day_w, H_TABLE, text="Day")
+        pdf.cell(open_w, H_TABLE, text="Open")
+        pdf.cell(close_w, H_TABLE, text="Close",
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        return day_w, open_w, close_w
+
+    ensure_space_for(pdf, H_TABLE * 2)
+    day_w, open_w, close_w = _header()
+
+    pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, (0, 0, 0))
     for day, (open_t, close_t) in hours_dict.items():
-        o = "" if open_t is None else str(open_t)
-        c = "" if close_t is None else str(close_t)
-        pdf.cell(day_w, 8, sanitize(day))
-        pdf.cell(open_w, 8, sanitize(o))
-        pdf.cell(close_w, 8, sanitize(c), ln=1)
+        if remaining_height(pdf) < (H_TABLE + 2):
+            pdf.add_page()
+            day_w, open_w, close_w = _header()
+        o = fmt_time(open_t)
+        c = fmt_time(close_t)
+        pdf.cell(day_w, H_TABLE, text=sanitize(day))
+        pdf.cell(open_w, H_TABLE, text=sanitize(o))
+        pdf.cell(close_w, H_TABLE, text=sanitize(c),
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
 def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None, y_top: float = None):
@@ -294,8 +256,7 @@ def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None,
         w_img, h_img = img.size
 
     page_w, page_h = pdf.w, pdf.h
-    left_margin, right_margin = pdf.l_margin, pdf.r_margin
-    usable_w = page_w - left_margin - right_margin
+    usable_w = page_w - pdf.l_margin - pdf.r_margin
 
     if max_w is None:
         max_w = usable_w
@@ -313,8 +274,134 @@ def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None,
 
     x = (page_w - draw_w) / 2.0
     pdf.image(path, x=x, y=y_top, w=draw_w, h=draw_h)
-    pdf.ln(draw_h + 4)
+    pdf.ln(draw_h + 3)
     return (draw_w, draw_h)
+
+# ---------- Two-cell Q/A row with fixed label column (LEFT aligned) ----------
+
+
+def kv_row_fixed_two_cells(pdf, label, value, label_w=100, line_h=H_ROW, gap=4):
+    """
+    Render one Q/A row as two wrapped cells:
+      - Left: label (bold), fixed width label_w, align L
+      - Right: value (regular), fills remaining width, align L
+      - Row height = max(height of the two cells)
+    """
+    total_w = usable_width(pdf)
+    x0 = pdf.l_margin
+    y0 = pdf.get_y()
+    val_w = total_w - label_w - gap
+
+    # Draw LABEL
+    pdf.set_font("Helvetica", "B", 11)
+    set_text_color(pdf, DARK)
+    pdf.set_xy(x0, y0)
+    pdf.multi_cell(label_w, line_h, text=sanitize(f"{label.rstrip(':')}:"),
+                   new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
+    y_label_end = pdf.get_y()
+
+    # Draw VALUE starting at the same top y
+    pdf.set_font("Helvetica", "", 11)
+    set_text_color(pdf, (0, 0, 0))
+    pdf.set_xy(x0 + label_w + gap, y0)
+    pdf.multi_cell(val_w, line_h, text=sanitize("" if value is None else str(value)),
+                   new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
+    y_value_end = pdf.get_y()
+
+    # Advance to the end of the taller cell
+    row_h = max(y_label_end, y_value_end) - y0
+    ensure_space_for(pdf, row_h)
+    pdf.set_xy(x0, y0 + row_h)
+
+# ---------- Two pairs per line (for Equipment Info) with wrapping ----------
+
+
+def _pair_block(pdf, x, y, col_w, label, value, label_w, line_h=H_ROW, gap=4):
+    """Draw one label/value pair inside a column at (x,y) and return end y."""
+    pdf.set_xy(x, y)
+    pdf.set_font("Helvetica", "B", 11)
+    set_text_color(pdf, DARK)
+    pdf.multi_cell(label_w, line_h, text=sanitize(f"{label.rstrip(':')}:"),
+                   new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
+    y_label_end = pdf.get_y()
+
+    pdf.set_xy(x + label_w + gap, y)
+    pdf.set_font("Helvetica", "", 11)
+    set_text_color(pdf, (0, 0, 0))
+    pdf.multi_cell(col_w - label_w - gap, line_h,
+                   text=sanitize("" if value is None else str(value)),
+                   new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
+    y_value_end = pdf.get_y()
+
+    return max(y_label_end, y_value_end)
+
+
+def kv_row_two_pairs_wrapped(pdf, l1, v1, l2, v2, label_w=28, gap_between_cols=10, inner_gap=4):
+    """
+    Render two label/value pairs on one line (left and right columns),
+    each pair wraps within its own half of the page.
+    """
+    x_left = pdf.l_margin
+    y_top = pdf.get_y()
+    total_w = usable_width(pdf)
+    col_w = (total_w - gap_between_cols) / 2.0
+    x_right = x_left + col_w + gap_between_cols
+
+    y_end_left = _pair_block(pdf, x_left, y_top, col_w,
+                             l1, v1, label_w, gap=inner_gap)
+    y_end_right = _pair_block(
+        pdf, x_right, y_top, col_w, l2, v2, label_w, gap=inner_gap)
+
+    pdf.set_xy(pdf.l_margin, max(y_end_left, y_end_right))
+
+
+def field_visible(field, answers):
+    cond = field.get("visible_if")
+    if not cond:
+        return True
+    dep_name = cond.get("field")
+    expected = cond.get("equals")
+    return answers.get(dep_name) == expected
+
+
+def write_section_to_pdf_QA(pdf, section, answers, title_override=None, label_w=100):
+    """Left: question (fixed width). Right: answer. One Q/A per row. Textareas are full-width."""
+    section_header(pdf, title_override or section.get("title", ""))
+    for field in section.get("fields", []):
+        if not field_visible(field, answers):
+            continue
+        name = field.get("name") or ""
+        label = field.get("label", name)
+        ftype = field.get("type", "text")
+        val = answers.get(name)
+        if ftype == "textarea":
+            if val not in (None, "", []):
+                para(pdf, label, val)
+        else:
+            kv_row_fixed_two_cells(pdf, label, val, label_w=label_w)
+    pdf.ln(SPACE_AFTER_BLOCK)
+    draw_hr(pdf)
+
+
+def write_contact_info(pdf, sections, answers):
+    for sec in sections:
+        if sec.get("title") == "Contact Information":
+            section_header(pdf, "Contact Info")
+            for field in sec.get("fields", []):
+                if not field_visible(field, answers):
+                    continue
+                name = field.get("name") or ""
+                label = field.get("label", name)
+                ftype = field.get("type", "text")
+                val = answers.get(name)
+                if ftype == "textarea":
+                    if val not in (None, "", []):
+                        para(pdf, label, val)
+                else:
+                    kv_row_fixed_two_cells(pdf, label, val, label_w=90)
+            pdf.ln(SPACE_AFTER_BLOCK)
+            draw_hr(pdf)
+            break
 
 
 # ---------------- Submit -> Build PDF ----------------
@@ -323,86 +410,58 @@ if st.button("✅ Submit Survey"):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Title block (centered), divider, then content left-aligned
+    # Title
     page_title(pdf, "Site Survey Report", f"Date: {datetime.date.today()}")
 
-    # Equipment image (centered but modest)
+    # Smaller hero image
     try:
         if os.path.exists(image_path):
-            center_image(pdf, image_path, max_w=120)
+            center_image(pdf, image_path, max_w=85)
     except Exception:
         pass
 
-    # Equipment Info
+    # --- Equipment Info (wrapped two-pair rows) ---
     section_header(pdf, "Equipment Info")
     dims = f"{model_info['width']} x {model_info['depth']} x {model_info['height']}"
-    kv_row_two_col(pdf, "Make", make, "Model", model)
-    kv_row_two_col(pdf, "Weight", model_info.get(
-        "weight", ""), "Dimensions", dims)
-    pdf.ln(2)
+    kv_row_two_pairs_wrapped(pdf, "Make", make, "Model", model, label_w=28)
+    kv_row_two_pairs_wrapped(pdf, "Weight", model_info.get(
+        "weight", ""), "Dimensions", dims, label_w=28)
+    pdf.ln(SPACE_AFTER_BLOCK)
     draw_hr(pdf)
 
-    # Contact Info
-    section_header(pdf, "Contact Info")
-    kv_row(pdf, "Company", company)
-    kv_row(pdf, "Contact", contact)
-    kv_row(pdf, "Address", address)
-    kv_row(pdf, "Phone", phone)
-    kv_row(pdf, "Email", email)
-    pdf.ln(2)
-    draw_hr(pdf)
+    # --- Contact Info ---
+    write_contact_info(pdf, sections_used, answers)
 
-    # Hours of Operation
+    # --- Hours of Operation (no seconds) ---
+    ensure_space(pdf, needed=90)
     section_header(pdf, "Hours of Operation")
     hours_table(pdf, hours)
-    pdf.ln(2)
+    pdf.ln(SPACE_AFTER_BLOCK)
     draw_hr(pdf)
 
-    # Delivery Instructions
-    section_header(pdf, "Delivery Instructions")
-    kv_row(pdf, "Days Prior", days_prior)
-    kv_row(pdf, "Storage Space", storage_space)
-    kv_row(pdf, "Loading Dock", loading_dock)
-    kv_row(pdf, "Delivery Hours", delivery_hours)
-    kv_row(pdf, "Location", delivery_loc)
+    # --- Delivery Instructions (clean fixed two-cell Q/A rows) ---
+    ensure_glue(pdf, min_after=26)
+    for _sec in sections_used:
+        if _sec.get("title") == "Delivery Instructions":
+            write_section_to_pdf_QA(
+                pdf, _sec, answers, title_override="Delivery Instructions", label_w=100)
+            break
 
-    if path_desc:
-        para(pdf, "Path", path_desc)
-    if staircase_notes:
-        para(pdf, "Stairs", staircase_notes)
-    if elevator_notes:
-        para(pdf, "Elevators", elevator_notes)
-    if delivery_notes:
-        para(pdf, "Other Notes", delivery_notes)
-    pdf.ln(2)
-    draw_hr(pdf)
+    # --- Installation Details (clean fixed two-cell Q/A rows) ---
+    ensure_glue(pdf, min_after=26)
+    for _sec in sections_used:
+        if _sec.get("title") == "Installation Location":
+            write_section_to_pdf_QA(
+                pdf, _sec, answers, title_override="Installation Details", label_w=100)
+            break
 
-    # Installation Details
-    section_header(pdf, "Installation Details")
-    kv_row(pdf, "Floor Scan", floor_scan)
-    kv_row(pdf, "Speedtest", f"{download_speed} Down / {upload_speed} Up")
-    kv_row(pdf, "Door Size", door_size)
-    kv_row(pdf, "Room Size", room_size)
-    kv_row(pdf, "Space Available", sufficient_space)
-    kv_row_two_col(pdf, "Floor", floor_type,
-                   "Other Floor Type", other_floor_type)
-    kv_row_two_col(pdf, "Other Safe", other_safe, "Type", safe_type)
-    kv_row_two_col(pdf, "Network", network, "Distance", network_distance)
-    kv_row_two_col(pdf, "Water Distance",
-                   water_distance, "Power Nearby", power)
-
-    if install_notes:
-        para(pdf, "Notes", install_notes)
-
-    # Photos: one per page, with a centered image and left-aligned caption
+    # --- Photos: one per page ---
     if photos:
         for photo in photos[:20]:
             temp_path = None
             try:
                 pdf.add_page()
                 section_header(pdf, "Site Survey Photo")
-
-                # Convert for FPDF
                 img = Image.open(photo).convert("RGB")
                 temp_path = f"temp_{photo.name}.jpg"
                 img.save(temp_path, format="JPEG")
@@ -413,27 +472,28 @@ if st.button("✅ Submit Survey"):
                 max_h = pdf.h - y_top - pdf.b_margin - 5
                 center_image(pdf, temp_path, max_w=max_w,
                              max_h=max_h, y_top=y_top)
-
             except Exception:
-                pdf.set_font("Arial", "B", 12)
+                pdf.set_font("Helvetica", "B", 11)
                 set_text_color(pdf, (200, 0, 0))
-                pdf.cell(0, 8, txt=sanitize(
-                    f"Error displaying image {photo.name}"), ln=1)
+                pdf.cell(0, H_ROW, text=sanitize(f"Error displaying image {photo.name}"),
+                         new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             finally:
                 if temp_path and os.path.exists(temp_path):
                     os.remove(temp_path)
 
-    # Footer line + centered footer text
+    # Footer
     pdf.set_y(-18)
     draw_hr(pdf, thickness=0.2)
-    pdf.set_font("Arial", "I", 8)
+    pdf.set_font("Helvetica", "I", 8)
     set_text_color(pdf, (90, 90, 90))
-    pdf.cell(0, 8, txt=sanitize(
-        "Generated by Site Survey App - Version 1.0 - © 2025"), align="C")
+    pdf.cell(0, 8, text=sanitize("Generated by Site Survey App - Version 1.0 - © 2025"),
+             align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     # Streamlit download
-    _out = pdf.output(dest="S")
-    pdf_bytes = _ensure_bytes(_out)
+    buf = BytesIO()
+    pdf.output(buf)
+    pdf_bytes = buf.getvalue()
+
     st.success("Survey submitted successfully! PDF is ready below.")
     st.download_button(
         label="📄 Download PDF Report",
