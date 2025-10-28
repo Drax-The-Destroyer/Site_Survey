@@ -137,6 +137,9 @@ H_ROW = 6.5
 H_TABLE = 7
 SPACE_AFTER_SEC = 1.2
 SPACE_AFTER_BLOCK = 1.2
+# Horizontal rule defaults (used by draw_hr and spacing checks)
+HR_THICK = 0.4
+HR_PAD = 2
 
 
 def set_text_color(pdf, rgb):
@@ -172,17 +175,54 @@ def ensure_glue(pdf, min_after=22):
         pdf.add_page()
 
 
-def draw_hr(pdf, y=None, thickness=0.3):
+def _measure_lines(pdf, w, h, text):
+    """
+    Return the lines that would be produced by multi_cell without drawing.
+
+    Uses the modern fpdf2 API (dry_run=True, output="LINES") when available and
+    falls back to the older split_only=True argument for compatibility with
+    older fpdf2 releases.
+    """
+    try:
+        return pdf.multi_cell(w, h, text=text, dry_run=True, output="LINES")
+    except TypeError:
+        # Older fpdf versions that still expect split_only
+        return pdf.multi_cell(w, h, text=text, split_only=True)
+
+
+def draw_hr(pdf, y=None, thickness=None):
+    """
+    Draw a horizontal rule, but guard against page-bottom collisions by
+    pre-checking available vertical space and forcing a page-break if needed.
+
+    - thickness: optional line thickness; if None the default HR_THICK is used.
+    - HR_PAD is applied above and below the rule to avoid collisions.
+    """
+    # Use default thickness when not explicitly provided
+    thickness = HR_THICK if thickness is None else thickness
+    pad = HR_PAD
+
     if y is not None:
         pdf.set_y(y)
+
+    # Proposed Y where the rule would be drawn (after top pad)
+    y_pos = pdf.get_y() + pad
+    bottom = pdf.h - pdf.b_margin
+
+    # If the rule + bottom pad would exceed the usable page area, add a page first
+    if y_pos + thickness + pad > bottom:
+        pdf.add_page()
+        y_pos = pdf.get_y() + pad
+
     x1 = pdf.l_margin
     x2 = pdf.w - pdf.r_margin
-    y = pdf.get_y()
     r, g, b = LINE_GRAY
     pdf.set_draw_color(r, g, b)
     pdf.set_line_width(thickness)
-    pdf.line(x1, y, x2, y)
-    pdf.ln(2)
+    pdf.line(x1, y_pos, x2, y_pos)
+
+    # Move cursor to just after the bottom pad so subsequent content starts below the rule
+    pdf.set_y(y_pos + pad)
 
 
 def page_title(pdf, title, date_str):
@@ -280,38 +320,50 @@ def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None,
 # ---------- Two-cell Q/A row with fixed label column (LEFT aligned) ----------
 
 
+def _label_with_punct(s: str) -> str:
+    s = (s or "").rstrip()
+    return s if s.endswith((':', '?')) else s + ':'
+
+
 def kv_row_fixed_two_cells(pdf, label, value, label_w=100, line_h=H_ROW, gap=4):
-    """
-    Render one Q/A row as two wrapped cells:
-      - Left: label (bold), fixed width label_w, align L
-      - Right: value (regular), fills remaining width, align L
-      - Row height = max(height of the two cells)
-    """
     total_w = usable_width(pdf)
     x0 = pdf.l_margin
     y0 = pdf.get_y()
-    val_w = total_w - label_w - gap
+    val_w = max(0, total_w - label_w - gap)
+
+    label_text = sanitize(_label_with_punct(label))
+    value_text = sanitize("" if value is None else str(value))
+
+    # Measure (no drawing) so we can page-break cleanly if needed
+    label_lines = _measure_lines(pdf, label_w, line_h, label_text)
+    value_lines = _measure_lines(pdf, val_w, line_h, value_text)
+    n_label = max(1, len(label_lines))
+    n_value = max(1, len(value_lines))
+    row_h = max(n_label, n_value) * line_h
+
+    # Page break BEFORE drawing if the row won’t fit
+    if y0 + row_h > (pdf.h - pdf.b_margin):
+        pdf.add_page()
+        x0 = pdf.l_margin
+        y0 = pdf.get_y()
 
     # Draw LABEL
     pdf.set_font("Helvetica", "B", 11)
     set_text_color(pdf, DARK)
     pdf.set_xy(x0, y0)
-    pdf.multi_cell(label_w, line_h, text=sanitize(f"{label.rstrip(':')}:"),
+    pdf.multi_cell(label_w, line_h, text=label_text,
                    new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
-    y_label_end = pdf.get_y()
 
-    # Draw VALUE starting at the same top y
+    # Draw VALUE at the same top Y
     pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, (0, 0, 0))
     pdf.set_xy(x0 + label_w + gap, y0)
-    pdf.multi_cell(val_w, line_h, text=sanitize("" if value is None else str(value)),
+    pdf.multi_cell(val_w, line_h, text=value_text,
                    new_x=XPos.LEFT, new_y=YPos.NEXT, align="L")
-    y_value_end = pdf.get_y()
 
-    # Advance to the end of the taller cell
-    row_h = max(y_label_end, y_value_end) - y0
-    ensure_space_for(pdf, row_h)
+    # Advance to next row start
     pdf.set_xy(x0, y0 + row_h)
+
 
 # ---------- Two pairs per line (for Equipment Info) with wrapping ----------
 
@@ -365,7 +417,12 @@ def field_visible(field, answers):
 
 
 def write_section_to_pdf_QA(pdf, section, answers, title_override=None, label_w=100):
-    """Left: question (fixed width). Right: answer. One Q/A per row. Textareas are full-width."""
+    """
+    Render a section as a sequence of two-column Q/A rows (or full-width textareas
+    when a field has layout == "full"). This function reserves space at the end of
+    the section for the trailing spacer + horizontal rule and will page-break
+    beforehand if that block wouldn't fit.
+    """
     section_header(pdf, title_override or section.get("title", ""))
     for field in section.get("fields", []):
         if not field_visible(field, answers):
@@ -374,11 +431,22 @@ def write_section_to_pdf_QA(pdf, section, answers, title_override=None, label_w=
         label = field.get("label", name)
         ftype = field.get("type", "text")
         val = answers.get(name)
-        if ftype == "textarea":
+
+        # Allow a per-field flag to force full-width rendering (e.g., textareas)
+        force_full = field.get("layout") == "full"
+
+        if ftype == "textarea" and force_full:
             if val not in (None, "", []):
                 para(pdf, label, val)
         else:
             kv_row_fixed_two_cells(pdf, label, val, label_w=label_w)
+
+    # Reserve space for the spacer + rule; page-break first if needed
+    thickness = HR_THICK
+    need = SPACE_AFTER_BLOCK + HR_PAD + thickness + HR_PAD
+    if pdf.get_y() + need > (pdf.h - pdf.b_margin):
+        pdf.add_page()
+
     pdf.ln(SPACE_AFTER_BLOCK)
     draw_hr(pdf)
 
@@ -402,6 +470,62 @@ def write_contact_info(pdf, sections, answers):
             pdf.ln(SPACE_AFTER_BLOCK)
             draw_hr(pdf)
             break
+
+
+def render_debug_layout_demo(pdf):
+    """
+    Dev-only helper: render the 'Delivery/Installation QA – Stress' test section
+    which contains a mix of short and long labels/values repeated to force page
+    breaks. Use this to visually verify:
+      - No row crosses a page boundary mid-row
+      - HR lines never overlap content
+      - Two-column rows align their values to the top of the label
+    """
+    # Build the stress section
+    stress_section = {
+        "title": "Delivery/Installation QA – Stress",
+        "fields": []
+    }
+
+    # One group of fields as specified in the acceptance tests
+    long_label = "This is a VERY long label intended to force wrapping across multiple lines to exercise label wrapping behaviour in the two-column layout"
+    short_para = "This is a long paragraph answer intended to wrap across several lines so we can verify vertical alignment between the label and the value column. " \
+                 "Repeat content to increase length. " * 3
+    long_textarea = "Textarea content: " + \
+        ("Lorem ipsum dolor sit amet, consectetur adipiscing elit. " * 6)
+
+    # Create a single group
+    group = [
+        {"name": "s_short_1", "label": "Short A", "type": "text"},
+        {"name": "s_short_2", "label": "Short B", "type": "text"},
+        {"name": "s_short_3", "label": "Short C", "type": "text"},
+        {"name": "s_long_label", "label": long_label, "type": "text"},
+        {"name": "s_short_label_long_value", "label": "Notes", "type": "text"},
+        {"name": "s_textarea_long", "label": "Comments",
+            "type": "textarea", "layout": "full"},
+    ]
+
+    # Add multiple copies to force multiple pages
+    copies = 6
+    for i in range(copies):
+        for fld in group:
+            # clone with unique name/label to avoid collisions if desired
+            fld_copy = fld.copy()
+            fld_copy["name"] = f"{fld['name']}_{i}"
+            stress_section["fields"].append(fld_copy)
+
+    # Build answers to match the fields (mix short and long)
+    answers = {}
+    for i in range(copies):
+        answers[f"s_short_1_{i}"] = "One"
+        answers[f"s_short_2_{i}"] = "Two"
+        answers[f"s_short_3_{i}"] = "Three"
+        answers[f"s_long_label_{i}"] = "X"  # one-word answer for long label
+        answers[f"s_short_label_long_value_{i}"] = short_para
+        answers[f"s_textarea_long_{i}"] = long_textarea
+
+    # Render the stress section using the existing writer (will respect full-width textareas)
+    write_section_to_pdf_QA(pdf, stress_section, answers, label_w=100)
 
 
 # ---------------- Submit -> Build PDF ----------------
