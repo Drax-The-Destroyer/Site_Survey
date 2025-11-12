@@ -1,0 +1,30 @@
+{
+  "images": {
+    "kisan-newton-3.png": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\kisan-newton-3.png",
+      "ts": 1761837695.2845876
+    },
+    "tidel-d3.png": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d3.png",
+      "ts": 1761841652.6732278
+    },
+    "tidel-d4.png": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d4.png",
+      "ts": 1762443755.959148
+    }
+  },
+  "brochures": {
+    "newton3-catalogue.pdf": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\newton3-catalogue.pdf",
+      "ts": 1761836553.6286972
+    },
+    "tidel-d3-family-brochure.pdf": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d3-family-brochure.pdf",
+      "ts": 1761841641.2633624
+    },
+    "tidel-d4.pdf": {
+      "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d4.pdf",
+      "ts": 1762443787.6820157
+    }
+  }
+}

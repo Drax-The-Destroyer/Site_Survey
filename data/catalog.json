@@ -1,0 +1,69 @@
+{
+  "makes": {
+    "tidel": {
+      "label": "TiDel",
+      "models": {
+        "d3-snf-w-storage-vault": {
+          "label": "D3 SNF w/ Storage Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "40 kg / 88 lb",
+            "width": "259 mm / 10.2 in",
+            "depth": "482 mm / 19.0 in",
+            "height": "705 mm / 27.8 in"
+          },
+          "media": {
+            "hero_image": "tidel-d3.png",
+            "gallery": [],
+            "brochures": [
+              "tidel-d3-family-brochure.pdf"
+            ]
+          }
+        },
+        "d4-bnf-w-storage-vault": {
+          "label": "D4 BNF w/ Storage Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 150 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.7 in"
+          },
+          "media": {
+            "hero_image": "tidel-d4.png",
+            "gallery": [],
+            "brochures": [
+              "tidel-d4.pdf"
+            ]
+          }
+        }
+      }
+    },
+    "kisan": {
+      "label": "Kisan",
+      "models": {
+        "newton-3": {
+          "label": "Newton 3",
+          "category": "note_sorter",
+          "dimensions": {
+            "weight": "13 kg / 29 lb",
+            "width": "312 mm / 12.3 in",
+            "depth": "340 mm / 13.4 in",
+            "height": "340 mm / 13.4 in"
+          },
+          "media": {
+            "hero_image": "kisan-newton-3.png",
+            "gallery": [],
+            "brochures": [
+              "newton3-catalogue.pdf"
+            ]
+          }
+        }
+      }
+    },
+    "cima": {
+      "label": "CIMA",
+      "models": {}
+    }
+  }
+}
