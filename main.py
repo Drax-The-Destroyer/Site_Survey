@@ -77,7 +77,8 @@ def nbsp_units(s: str) -> str:
 
 # ---------------- App Config ----------------
 
-st.set_page_config(page_title="Site Survey Form", layout="centered")
+# st.set_page_config(page_title="Site Survey Form", layout="centered")
+st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="expanded")
 st.title("📋 Site Survey Form")
 
 # Load data-driven resources
@@ -955,3 +956,4 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
