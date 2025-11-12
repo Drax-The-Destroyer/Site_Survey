@@ -313,8 +313,8 @@ DEFAULT_MEDIA_INDEX = {"images": {}, "brochures": {}}
 if "_admin_loaded_at" not in st.session_state:
     st.session_state._admin_loaded_at = time.time()
 
-st.set_page_config(page_title="Admin • Site Survey",
-                   page_icon="🛠️", layout="wide")
+# st.set_page_config(page_title="Admin • Site Survey",
+#                    page_icon="🛠️", layout="wide")
 
 st.title("🛠️ Admin Console")
 st.caption("Manage catalogs, questions, media, users, and system settings.")
@@ -1297,3 +1297,4 @@ with TAB[7]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
