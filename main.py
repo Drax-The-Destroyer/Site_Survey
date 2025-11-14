@@ -884,11 +884,24 @@ if st.button("✅ Submit Survey"):
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
+pdf.add_page()
 
-    # Title
-    pdf.set_title("Site Survey Report")
-    page_title(pdf, "Site Survey Report", f"Date: {datetime.date.today()}")
+# --------------------------------------------------
+#  TOP-RIGHT LOGO
+# --------------------------------------------------
+try:
+    if image_path and os.path.exists(image_path):
+        # Position: 170mm from left (adjust for your page width)
+        pdf.image(image_path, x=170, y=10, w=30)  # w=30 = good size for logo
+except Exception as e:
+    print("Logo error:", e)
+
+# --------------------------------------------------
+#  TITLE (Centered)
+# --------------------------------------------------
+pdf.set_title("Site Survey Report")
+page_title(pdf, "Site Survey Report", f"Date: {datetime.date.today()}")
+
 
     # Smaller hero image
     try:
@@ -983,5 +996,6 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
