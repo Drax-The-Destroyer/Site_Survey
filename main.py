@@ -885,16 +885,23 @@ if st.button("✅ Submit Survey"):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    
+
     # --------------------------------------------------
-    #  TOP-RIGHT LOGO
+    # TOP-RIGHT COMPANY LOGO (from Settings)
     # --------------------------------------------------
     try:
-        if image_path and os.path.exists(image_path):
-            # Position: 170mm from left (adjust for your page width)
-            pdf.image(image_path, x=170, y=10, w=30)  # w=30 = good size for logo
+        settings_logo = settings.get("media", {}).get("hero_image", "")
+        global_logo_path = _hero_path(settings_logo)
+    
+        if global_logo_path and os.path.exists(global_logo_path):
+            # Auto-position right side dynamically
+            page_w = pdf.w
+            logo_w = 28  # good size for header
+            x_pos = page_w - pdf.r_margin - logo_w
+    
+            pdf.image(global_logo_path, x=x_pos, y=10, w=logo_w)
     except Exception as e:
-        print("Logo error:", e)
+        print("Settings logo error:", e)
     
     # --------------------------------------------------
     #  TITLE (Centered)
@@ -996,6 +1003,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
