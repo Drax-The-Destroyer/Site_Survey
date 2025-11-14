@@ -943,19 +943,19 @@ if st.button("✅ Submit Survey"):
     # --------------------------------------------------
     # TOP-RIGHT COMPANY LOGO (from Settings)
     # --------------------------------------------------
-    try:
-        settings_logo = settings.get("media", {}).get("hero_image", "")
-        global_logo_path = _hero_path(settings_logo)
+    # try:
+    #     settings_logo = settings.get("media", {}).get("hero_image", "")
+    #     global_logo_path = _hero_path(settings_logo)
     
-        if global_logo_path and os.path.exists(global_logo_path):
-            # Auto-position right side dynamically
-            page_w = pdf.w
-            logo_w = 28  # good size for header
-            x_pos = page_w - pdf.r_margin - logo_w
+    #     if global_logo_path and os.path.exists(global_logo_path):
+    #         # Auto-position right side dynamically
+    #         page_w = pdf.w
+    #         logo_w = 28  # good size for header
+    #         x_pos = page_w - pdf.r_margin - logo_w
     
-            pdf.image(global_logo_path, x=x_pos, y=10, w=logo_w)
-    except Exception as e:
-        print("Settings logo error:", e)
+    #         pdf.image(global_logo_path, x=x_pos, y=10, w=logo_w)
+    # except Exception as e:
+    #     print("Settings logo error:", e)
     
     # --------------------------------------------------
     #  TITLE (Centered)
@@ -1063,6 +1063,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
