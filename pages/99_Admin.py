@@ -44,6 +44,7 @@ import re
 import json
 import time
 import shutil
+import zipfile
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -1254,6 +1255,23 @@ with TAB[5]:
         else:
             st.error(f"Image not found: {img_path}")
 
+def build_data_bundle_zip() -> bytes:
+    """
+    Create an in-memory ZIP containing the entire ./data folder
+    (JSON files + media). Used for backup/export so you can
+    download and then commit to GitHub or move to another host.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(DATA_DIR):
+            for fname in files:
+                full_path = os.path.join(root, fname)
+                # Store paths inside the zip starting at "data/..."
+                rel = os.path.relpath(full_path, DATA_DIR)
+                arcname = os.path.join("data", rel)
+                zf.write(full_path, arcname)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # -----------------------------
@@ -1303,6 +1321,16 @@ with TAB[6]:
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
 
+    st.divider()
+    st.markdown("### Export / Backup data folder")
+
+    data_zip_bytes = build_data_bundle_zip()
+    st.download_button(
+        "📦 Download data.zip (catalog + questions + media)",
+        data=data_zip_bytes,
+        file_name="site_survey_data_bundle.zip",
+        mime="application/zip",
+    )
 
 
 
