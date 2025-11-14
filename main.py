@@ -380,19 +380,46 @@ for _sec in sections_used:
 
 # --- Hours of Operation ---
 st.subheader("5. Hours of Operation")
+
 days = ["Monday", "Tuesday", "Wednesday",
         "Thursday", "Friday", "Saturday", "Sunday"]
+
+# Default times and step for the time picker
+DEFAULT_OPEN_TIME = datetime.time(8, 0)   # 08:00
+DEFAULT_CLOSE_TIME = datetime.time(20, 0) # 20:00 (8 PM)
+TIME_STEP = datetime.timedelta(minutes=30)  # 30-minute increments
+
 hours: Dict[str, Any] = {}
 for day in days:
+    open_key = f"open_{day}"
+    close_key = f"close_{day}"
+
+    # Seed defaults only once per session
+    if open_key not in st.session_state:
+        st.session_state[open_key] = DEFAULT_OPEN_TIME
+    if close_key not in st.session_state:
+        st.session_state[close_key] = DEFAULT_CLOSE_TIME
+
     cols = st.columns(3)
     with cols[0]:
         st.markdown(f"**{day}**")
     with cols[1]:
-        open_time = st.time_input(f"Open {day}", key=f"open_{day}", step=60)
+        open_time = st.time_input(
+            f"Open {day}",
+            key=open_key,
+            step=TIME_STEP,  # 30-min increments
+        )
     with cols[2]:
-        close_time = st.time_input(f"Close {day}", key=f"close_{day}", step=60)
+        close_time = st.time_input(
+            f"Close {day}",
+            key=close_key,
+            step=TIME_STEP,  # 30-min increments
+        )
+
     hours[day] = (open_time, close_time)
+
 answers["hours"] = hours
+
 
 # --- Delivery Instructions ---
 st.subheader(f"6. {lang_map.get('section.delivery', 'Delivery Instructions')}")
@@ -956,4 +983,5 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
