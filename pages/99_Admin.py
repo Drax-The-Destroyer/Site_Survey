@@ -1183,41 +1183,45 @@ with TAB[5]:
 
     s = settings
 
-    # Build dropdown list of uploaded images
-    image_choices = [""] + sorted((media_index.get("images") or {}).keys())
-    current_hero = s.get("media", {}).get("hero_image", "")
+    # --- Load media index (image filenames) ---
+    media_index_path = os.path.join("data", "media", "index.json")
+    try:
+        with open(media_index_path, "r") as f:
+            media_index = json.load(f)
+    except:
+        media_index = {"images": {}}
+
+    image_files = list(media_index.get("images", {}).keys())
 
     with st.form("settings_form"):
         c1, c2 = st.columns(2)
-
-        # --- LEFT COLUMN ---
         with c1:
             s["branding"]["company_name"] = st.text_input(
-                "Company name",
-                value=s.get("branding", {}).get("company_name", "")
+                "Company name", value=s.get("branding", {}).get("company_name", "")
             )
-
             s["branding"]["pdf_header"] = st.text_input(
-                "PDF Header",
-                value=s.get("branding", {}).get("pdf_header", "")
+                "PDF Header", value=s.get("branding", {}).get("pdf_header", "")
             )
-
-        # --- RIGHT COLUMN ---
         with c2:
             s["branding"]["pdf_footer"] = st.text_input(
-                "PDF Footer",
-                value=s.get("branding", {}).get("pdf_footer", "")
+                "PDF Footer", value=s.get("branding", {}).get("pdf_footer", "")
             )
 
-            # NEW hero image dropdown
+            # NEW: Dropdown from Media Library images
             s["media"]["hero_image"] = st.selectbox(
                 "Hero image (optional)",
-                options=image_choices,
-                index=image_choices.index(current_hero) if current_hero in image_choices else 0,
-                help="Select an uploaded image from the Media Library to use as the PDF header logo."
+                options=[""] + image_files,
+                index=([""] + image_files).index(s.get("media", {}).get("hero_image", "")),
             )
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
+
+    if submitted:
+        with open(SETTINGS_FP, "w", encoding="utf-8") as f:
+            json.dump(s, f, indent=2)
+        st.success("Settings saved!")
+        st.experimental_rerun()
+
 
     # --- Save Settings ---
     if submitted:
@@ -1281,6 +1285,7 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
 
