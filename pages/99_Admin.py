@@ -1211,23 +1211,19 @@ with TAB[5]:
             s["media"]["hero_image"] = st.selectbox(
                 "Hero image (optional)",
                 options=[""] + image_files,
-                index=([""] + image_files).index(s.get("media", {}).get("hero_image", "")),
+                index=([""] + image_files).index(
+                    s.get("media", {}).get("hero_image", "")
+                ),
             )
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
 
-    if submitted:
-        with open(SETTINGS_FP, "w", encoding="utf-8") as f:
-            json.dump(s, f, indent=2)
-        st.success("Settings saved!")
-        st.experimental_rerun()
-
-
-    # --- Save Settings ---
+    # --- Save Settings ONCE and rerun ---
     if submitted:
         _write_json(SETTINGS_FP, s)
         bump_data_version()
-        st.success("Settings saved.")
+        st.success("Settings saved!")
+        st.rerun()
 
     # --- Preview (outside the form) ---
     if s["media"].get("hero_image"):
@@ -1237,6 +1233,7 @@ with TAB[5]:
             st.image(img_path, width=250)
         else:
             st.error(f"Image not found: {img_path}")
+
 
 
 # -----------------------------
@@ -1285,6 +1282,7 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
 
