@@ -1203,14 +1203,21 @@ with TAB[5]:
             s["branding"]["pdf_footer"] = st.text_input(
                 "PDF Footer", value=s.get("branding", {}).get("pdf_footer", "")
             )
-
-            # NEW: Dropdown from Media Library images
+        
+            # NEW: safe default index even if the saved hero image no longer exists
+            hero_options = [""] + image_files
+            current_hero = s.get("media", {}).get("hero_image", "")
+        
+            try:
+                default_index = hero_options.index(current_hero)
+            except ValueError:
+                default_index = 0  # fallback to "no hero image" if not found
+        
+            s.setdefault("media", {})
             s["media"]["hero_image"] = st.selectbox(
                 "Hero image (optional)",
-                options=[""] + image_files,
-                index=([""] + image_files).index(
-                    s.get("media", {}).get("hero_image", "")
-                ),
+                options=hero_options,
+                index=default_index,
             )
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
@@ -1279,6 +1286,7 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
 
