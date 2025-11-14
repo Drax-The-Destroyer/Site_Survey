@@ -1085,10 +1085,60 @@ with TAB[3]:
 with TAB[4]:
     st.subheader("Imports & Normalization")
     st.write(
-        "Drop CSV/JSON lists of models with free-text dimensions; we will normalize to app schema.")
+        "Drop CSV/JSON lists of models with free-text dimensions; we will normalize to app schema."
+    )
 
+    # --- Downloadable import templates (CSV + JSON) ---
+    st.markdown("### Download import templates")
+
+    # Columns that match the default mapper fields below
+    tmpl_columns = ["make", "model", "category", "weight", "width", "depth", "height"]
+
+    # Empty CSV with just headers
+    tmpl_df = pd.DataFrame(columns=tmpl_columns)
+    csv_bytes = tmpl_df.to_csv(index=False).encode("utf-8")
+
+    # JSON example with one sample row
+    json_template = [
+        {
+            "make": "TiDel",
+            "model": "Series 4",
+            "category": "smart_safe",
+            "weight": "55 kg",
+            "width": "300 mm",
+            "depth": "520 mm",
+            "height": "800 mm",
+        }
+    ]
+    json_bytes = json.dumps(json_template, indent=2).encode("utf-8")
+
+    c_t1, c_t2 = st.columns(2)
+    with c_t1:
+        st.download_button(
+            "📄 Download CSV template",
+            data=csv_bytes,
+            file_name="model_import_template.csv",
+            mime="text/csv",
+            key="dl_csv_template",
+        )
+    with c_t2:
+        st.download_button(
+            "🧾 Download JSON template",
+            data=json_bytes,
+            file_name="model_import_template.json",
+            mime="application/json",
+            key="dl_json_template",
+        )
+
+    st.divider()
+    st.markdown("### Upload file for import")
+
+    # --- Upload & preview ---
     uploaded = st.file_uploader(
-        "CSV or JSON", type=["csv", "json"], accept_multiple_files=False)
+        "CSV or JSON", type=["csv", "json"], accept_multiple_files=False
+    )
+    raw = None  # will hold JSON content when needed
+
     if uploaded is not None:
         # Try to display raw
         if uploaded.type.endswith("json"):
@@ -1098,6 +1148,7 @@ with TAB[4]:
             df = pd.read_csv(uploaded)
             st.dataframe(df, **editor_width_kwargs(width='stretch'))
 
+    # --- Field mapper ---
     with st.expander("Mapper", expanded=True):
         st.write("Tell the importer which fields are which. (Leave unused blank)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -1118,16 +1169,17 @@ with TAB[4]:
             f_height = st.text_input("col: height", value="height")
         with c8:
             do_update = st.checkbox(
-                "Update existing if keys match", value=True)
+                "Update existing if keys match", value=True
+            )
 
+    # --- Import button ---
     if wide_button("📥 Import to Catalog", type="primary"):
         if uploaded is None:
             st.warning("Upload a file first.")
         else:
             try:
                 if uploaded.type.endswith("json"):
-                    data = raw if isinstance(
-                        raw, list) else raw.get("items", [])
+                    data = raw if isinstance(raw, list) else raw.get("items", [])
                     df = pd.DataFrame(data)
                 else:
                     uploaded.seek(0)
@@ -1164,13 +1216,15 @@ with TAB[4]:
                         "width": fmt_length(w_mm, w_in),
                         "depth": fmt_length(d_mm, d_in),
                         "height": fmt_length(h_mm, h_in),
-                    }
+                    },
                 }
                 imp_count += 1
+
             catalog = rebuild_derived_catalog_structures(catalog, categories)
             _write_json(CATALOG_FP, catalog)
             bump_data_version()
             st.success(f"Imported {imp_count} rows.")
+
 
 # -----------------------------
 # Settings Tab
@@ -1331,6 +1385,7 @@ with TAB[6]:
         file_name="site_survey_data_bundle.zip",
         mime="application/zip",
     )
+
 
 
 
