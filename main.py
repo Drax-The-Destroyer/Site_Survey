@@ -101,9 +101,14 @@ settings = load_settings()
 
 # Extract the selected hero/logo file
 settings_logo = settings.get("media", {}).get("hero_image", "")
-settings_logo_path = os.path.join("data", "media", settings_logo) if settings_logo else None
-st.write("DEBUG LOGO PATH:", settings_logo_path)
-st.write("Exists on disk? ->", os.path.exists(settings_logo_path))
+settings_logo_path = _hero_path(settings_logo)
+st.write("DEBUG: settings_logo =", settings_logo)
+st.write("DEBUG: settings_logo_path =", settings_logo_path)
+
+if isinstance(settings_logo_path, str):
+    st.write("Exists on disk? ->", os.path.exists(settings_logo_path))
+else:
+    st.write("Exists on disk? ->", False)
 
 
 # Language toggle (scaffold for future FR)
@@ -190,33 +195,47 @@ hero_image = media.get("hero_image") or model_meta.get(
     "hero_image")  # support legacy field if present
 
 
-def _hero_path(h):
-    if not h:
+def _hero_path(filename: str | None):
+    """
+    Resolve a hero image filename to an absolute OS path.
+    Works locally AND on Streamlit Cloud.
+    """
+    if not filename:
         return None
-    h = str(h).replace("\\", "/")
 
-    # Absolute path as-is if it exists
-    if os.path.isabs(h) and os.path.exists(h):
-        return h
+    filename = filename.strip()
+    base = os.path.basename(filename)
 
-    # If JSON already provides a rooted relative like assets/... or data/media/...
-    rooted = h.lstrip("./")
-    rooted_path = os.path.join(os.getcwd(), rooted)
-    if h.startswith("assets/") or h.startswith("data/media/"):
-        return rooted_path if os.path.exists(rooted_path) else rooted_path
-
-    # Try common locations for bare filenames
-    base = os.path.basename(h)
-    candidates = [
-        os.path.join("assets", base),
+    # Local dev paths
+    local_paths = [
         os.path.join("data", "media", base),
+        os.path.join("assets", base),
     ]
-    for p in candidates:
+
+    # Streamlit Cloud mount paths
+    cloud_paths = [
+        os.path.join("/mount/src/site_survey/data/media", base),
+        os.path.join("/mount/src/site_survey/assets", base),
+        os.path.join("/mount/src/data/media", base),
+    ]
+
+    # Direct path provided?
+    if os.path.isabs(filename) and os.path.exists(filename):
+        return filename
+
+    # Try Local
+    for p in local_paths:
         if os.path.exists(p):
             return p
 
-    # Fallback to first candidate (assets) even if missing, to keep previous behavior
-    return candidates[0]
+    # Try Cloud-mounted paths
+    for p in cloud_paths:
+        if os.path.exists(p):
+            return p
+
+    # Not found — still return local path where it SHOULD be
+    return local_paths[0]
+
 
 
 image_path = _hero_path(hero_image)
@@ -1046,6 +1065,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
