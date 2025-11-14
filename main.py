@@ -1,6 +1,7 @@
 from collections import defaultdict
 import os
 import datetime
+import json
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
@@ -97,6 +98,47 @@ def load_settings():
     except:
         return {"branding": {}, "media": {}}
 
+def _hero_path(filename: str | None):
+    """
+    Resolve a hero image filename to an absolute OS path.
+    Works locally AND on Streamlit Cloud.
+    """
+    if not filename:
+        return None
+
+    filename = filename.strip()
+    base = os.path.basename(filename)
+
+    # Local dev paths
+    local_paths = [
+        os.path.join("data", "media", base),
+        os.path.join("assets", base),
+    ]
+
+    # Streamlit Cloud mount paths
+    cloud_paths = [
+        os.path.join("/mount/src/site_survey/data/media", base),
+        os.path.join("/mount/src/site_survey/assets", base),
+        os.path.join("/mount/src/data/media", base),
+    ]
+
+    # Direct path provided?
+    if os.path.isabs(filename) and os.path.exists(filename):
+        return filename
+
+    # Try Local
+    for p in local_paths:
+        if os.path.exists(p):
+            return p
+
+    # Try Cloud-mounted paths
+    for p in cloud_paths:
+        if os.path.exists(p):
+            return p
+
+    # Not found — still return local path where it SHOULD be
+    return local_paths[0]
+    
 settings = load_settings()
 
 # Extract the selected hero/logo file
@@ -193,50 +235,6 @@ model_height = model_dims.get("height", "")
 media = model_meta.get("media", {}) or {}
 hero_image = media.get("hero_image") or model_meta.get(
     "hero_image")  # support legacy field if present
-
-
-def _hero_path(filename: str | None):
-    """
-    Resolve a hero image filename to an absolute OS path.
-    Works locally AND on Streamlit Cloud.
-    """
-    if not filename:
-        return None
-
-    filename = filename.strip()
-    base = os.path.basename(filename)
-
-    # Local dev paths
-    local_paths = [
-        os.path.join("data", "media", base),
-        os.path.join("assets", base),
-    ]
-
-    # Streamlit Cloud mount paths
-    cloud_paths = [
-        os.path.join("/mount/src/site_survey/data/media", base),
-        os.path.join("/mount/src/site_survey/assets", base),
-        os.path.join("/mount/src/data/media", base),
-    ]
-
-    # Direct path provided?
-    if os.path.isabs(filename) and os.path.exists(filename):
-        return filename
-
-    # Try Local
-    for p in local_paths:
-        if os.path.exists(p):
-            return p
-
-    # Try Cloud-mounted paths
-    for p in cloud_paths:
-        if os.path.exists(p):
-            return p
-
-    # Not found — still return local path where it SHOULD be
-    return local_paths[0]
-
-
 
 image_path = _hero_path(hero_image)
 
@@ -1065,6 +1063,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
