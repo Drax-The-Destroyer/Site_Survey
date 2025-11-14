@@ -1180,15 +1180,29 @@ with TAB[5]:
 
     s = settings
 
-    # --- Load media index (image filenames) ---
+        # --- Load media index (image filenames) ---
     media_index_path = os.path.join("data", "media", "index.json")
     try:
-        with open(media_index_path, "r") as f:
+        with open(media_index_path, "r", encoding="utf-8") as f:
             media_index = json.load(f)
-    except:
+    except Exception:
         media_index = {"images": {}}
 
-    image_files = list(media_index.get("images", {}).keys())
+    # Collect image files from BOTH index.json and the filesystem,
+    # so "logo only" images still show up even if not attached to a model.
+    exts = {".png", ".jpg", ".jpeg", ".webp"}
+    try:
+        fs_files = [
+            f for f in os.listdir(MEDIA_DIR)
+            if os.path.splitext(f)[1].lower() in exts
+        ]
+    except FileNotFoundError:
+        fs_files = []
+
+    index_files = list((media_index.get("images") or {}).keys())
+    # Union of both sources
+    image_files = sorted(set(fs_files) | set(index_files))
+
 
     with st.form("settings_form"):
         c1, c2 = st.columns(2)
@@ -1199,26 +1213,28 @@ with TAB[5]:
             s["branding"]["pdf_header"] = st.text_input(
                 "PDF Header", value=s.get("branding", {}).get("pdf_header", "")
             )
+        
+        # Make sure these keys exist
+        s.setdefault("branding", {})
+        s.setdefault("media", {})
+
         with c2:
             s["branding"]["pdf_footer"] = st.text_input(
-                "PDF Footer", value=s.get("branding", {}).get("pdf_footer", "")
+                "PDF Footer",
+                value=s["branding"].get("pdf_footer", "")
             )
-        
-            # NEW: safe default index even if the saved hero image no longer exists
+
+            # Safe handling of current hero image
+            hero_current = s["media"].get("hero_image", "") or ""
             hero_options = [""] + image_files
-            current_hero = s.get("media", {}).get("hero_image", "")
-        
-            try:
-                default_index = hero_options.index(current_hero)
-            except ValueError:
-                default_index = 0  # fallback to "no hero image" if not found
-        
-            s.setdefault("media", {})
+            hero_index = hero_options.index(hero_current) if hero_current in hero_options else 0
+
             s["media"]["hero_image"] = st.selectbox(
                 "Hero image (optional)",
                 options=hero_options,
-                index=default_index,
+                index=hero_index,
             )
+
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
 
@@ -1286,6 +1302,7 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
 
