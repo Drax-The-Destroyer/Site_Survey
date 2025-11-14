@@ -322,7 +322,6 @@ st.caption("Manage catalogs, questions, media, users, and system settings.")
 catalog = _read_json(CATALOG_FP, DEFAULT_CATALOG)
 categories = _read_json(CATEGORIES_FP, DEFAULT_CATEGORIES)
 questions = _read_json(QUESTIONS_FP, DEFAULT_QUESTIONS)
-users_data = _read_json(USERS_FP, DEFAULT_USERS)
 settings = _read_json(SETTINGS_FP, DEFAULT_SETTINGS)
 media_index = _read_json(MEDIA_INDEX_FP, DEFAULT_MEDIA_INDEX)
 
@@ -1247,5 +1246,6 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
