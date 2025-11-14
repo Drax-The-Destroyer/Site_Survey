@@ -87,6 +87,23 @@ catalog = load_catalog(version)
 qdef = load_questions(version)
 lang_map = load_lang("en", version)
 
+# --- Load Settings (branding + logo) ---
+SETTINGS_FP = os.path.join("data", "settings.json")
+
+def load_settings():
+    try:
+        with open(SETTINGS_FP, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {"branding": {}, "media": {}}
+
+settings = load_settings()
+
+# Extract the selected hero/logo file
+settings_logo = settings.get("media", {}).get("hero_image", "")
+settings_logo_path = os.path.join("data", "media", settings_logo) if settings_logo else None
+
+
 # Language toggle (scaffold for future FR)
 st.selectbox("Language", ["English"], index=0)
 
@@ -1003,6 +1020,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
