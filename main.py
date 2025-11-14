@@ -558,17 +558,35 @@ def draw_hr(pdf, y=None, thickness=None):
     pdf.set_y(y_pos + pad)
 
 
-def page_title(pdf, title, date_str):
+def page_title(pdf, title, date_str, logo_path=None):
+    """
+    Draw page title + date, with optional company logo in the top-right.
+    """
+    # Draw logo top-right
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo_w = 32  # adjust as needed
+            x_pos = pdf.w - pdf.r_margin - logo_w
+            y_pos = pdf.get_y() + 2
+            pdf.image(logo_path, x=x_pos, y=y_pos, w=logo_w)
+        except Exception as e:
+            print("Logo draw error:", e)
+
+    # Title text aligned left (not centered)
     pdf.set_font("Helvetica", "B", 17)
     set_text_color(pdf, DARK)
     pdf.cell(0, 10, text=sanitize(title),
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
+
+    # Date under it
     pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, LIGHT)
     pdf.cell(0, 7, text=sanitize(date_str),
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
+
     pdf.ln(2)
     draw_hr(pdf)
+
 
 
 def section_header(pdf, text):
@@ -924,7 +942,13 @@ if st.button("✅ Submit Survey"):
     #  TITLE (Centered)
     # --------------------------------------------------
     pdf.set_title("Site Survey Report")
-    page_title(pdf, "Site Survey Report", f"Date: {datetime.date.today()}")
+    page_title(
+        pdf,
+        "Site Survey Report",
+        f"Date: {datetime.date.today()}",
+        logo_path=settings_logo_path
+    )
+
 
 
     # Smaller hero image
@@ -1020,6 +1044,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
