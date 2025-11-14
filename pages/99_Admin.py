@@ -1182,23 +1182,58 @@ with TAB[5]:
     st.write("Branding, PDF header/footer, and media defaults.")
 
     s = settings
+
+    # Build dropdown list of uploaded images
+    image_choices = [""] + sorted((media_index.get("images") or {}).keys())
+    current_hero = s.get("media", {}).get("hero_image", "")
+
     with st.form("settings_form"):
         c1, c2 = st.columns(2)
+
+        # --- LEFT COLUMN ---
         with c1:
             s["branding"]["company_name"] = st.text_input(
-                "Company name", value=s.get("branding", {}).get("company_name", ""))
+                "Company name",
+                value=s.get("branding", {}).get("company_name", "")
+            )
+
             s["branding"]["pdf_header"] = st.text_input(
-                "PDF Header", value=s.get("branding", {}).get("pdf_header", ""))
+                "PDF Header",
+                value=s.get("branding", {}).get("pdf_header", "")
+            )
+
+        # --- RIGHT COLUMN ---
         with c2:
             s["branding"]["pdf_footer"] = st.text_input(
-                "PDF Footer", value=s.get("branding", {}).get("pdf_footer", ""))
-            s["media"]["hero_image"] = st.text_input(
-                "Hero image path (optional)", value=s.get("media", {}).get("hero_image", ""))
+                "PDF Footer",
+                value=s.get("branding", {}).get("pdf_footer", "")
+            )
+
+            # NEW hero image dropdown
+            s["media"]["hero_image"] = st.selectbox(
+                "Hero image (optional)",
+                options=image_choices,
+                index=image_choices.index(current_hero) if current_hero in image_choices else 0,
+                help="Select an uploaded image from the Media Library to use as the PDF header logo."
+            )
+
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
+
+    # --- Save Settings ---
     if submitted:
         _write_json(SETTINGS_FP, s)
         bump_data_version()
         st.success("Settings saved.")
+
+    # --- Preview (outside the form) ---
+    if s["media"].get("hero_image"):
+        st.markdown("### Hero Image Preview")
+        img_path = os.path.join(MEDIA_DIR, s["media"]["hero_image"])
+        if os.path.exists(img_path):
+            st.image(img_path, width=250)
+        else:
+            st.error(f"Image not found: {img_path}")
+
 
 # -----------------------------
 # Maintenance Tab
@@ -1246,6 +1281,7 @@ with TAB[6]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
 
 
