@@ -94,7 +94,6 @@ MEDIA_DIR = os.path.join(DATA_DIR, "media")
 CATALOG_FP = os.path.join(DATA_DIR, "catalog.json")
 CATEGORIES_FP = os.path.join(DATA_DIR, "categories.json")
 QUESTIONS_FP = os.path.join(DATA_DIR, "questions.json")
-USERS_FP = os.path.join(DATA_DIR, "users.json")
 SETTINGS_FP = os.path.join(DATA_DIR, "settings.json")
 MEDIA_INDEX_FP = os.path.join(MEDIA_DIR, "index.json")
 VERSION_FP = os.path.join(DATA_DIR, "version.json")
@@ -439,7 +438,6 @@ TAB = st.tabs([
     "Question Sets",
     "Media Library",
     "Imports",
-    "Users & Roles",
     "Settings",
     "Maintenance",
 ])
@@ -1178,57 +1176,9 @@ with TAB[4]:
             st.success(f"Imported {imp_count} rows.")
 
 # -----------------------------
-# Users & Roles Tab
-# -----------------------------
-with TAB[5]:
-    st.subheader("Users & Roles (local file)")
-    st.write("Lightweight user directory – replace with DB auth later.")
-
-    roles = users_data.setdefault("roles", ["admin", "editor", "viewer"])
-    users = users_data.setdefault("users", [])
-
-    r_df = pd.DataFrame({"Role": roles})
-    r_edit = st.data_editor(r_df, hide_index=True, num_rows="dynamic", **editor_width_kwargs(width='stretch'))
-
-    u_df = pd.DataFrame(users)
-    if not u_df.empty and "active" in u_df.columns:
-        u_df["active"] = u_df["active"].astype(bool)
-    u_edit = st.data_editor(u_df, hide_index=True, num_rows="dynamic", **editor_width_kwargs(width='stretch'),
-                            column_config={"role": st.column_config.SelectboxColumn(options=list(r_edit["Role"].dropna().astype(str)))})
-
-    c1, c2 = st.columns(2)
-    with c1:
-        if wide_button("💾 Save Users & Roles", type="primary"):
-            users_data["roles"] = [
-                str(x).strip() for x in r_edit["Role"].dropna().tolist() if str(x).strip()]
-            # Clean users
-            new_users = []
-            for _, r in u_edit.iterrows():
-                email = str(r.get("email", ""))
-                if not email:
-                    continue
-                new_users.append({
-                    "email": email,
-                    "name": str(r.get("name", "")),
-                    "role": str(r.get("role", "viewer")),
-                    "active": bool(r.get("active", True)),
-                })
-            users_data["users"] = new_users
-            _write_json(USERS_FP, users_data)
-            st.success("Saved.")
-    with c2:
-        if wide_button("🧪 Validate users"):
-            emails = [u.get("email") for u in users_data.get("users", [])]
-            ok, dup = ensure_unique(emails)
-            if not ok:
-                st.error(f"Duplicate email: {dup}")
-            else:
-                st.success("Validation passed.")
-
-# -----------------------------
 # Settings Tab
 # -----------------------------
-with TAB[6]:
+with TAB[5]:
     st.subheader("System Settings")
     st.write("Branding, PDF header/footer, and media defaults.")
 
@@ -1254,7 +1204,7 @@ with TAB[6]:
 # -----------------------------
 # Maintenance Tab
 # -----------------------------
-with TAB[7]:
+with TAB[6]:
     st.subheader("Maintenance")
 
     if wide_button("🔎 Validate All", type="primary"):
@@ -1297,4 +1247,5 @@ with TAB[7]:
                 pass
             st.success("Cleared Streamlit data caches.")
     st.caption("Tip: Commit the ./data folder to version control to track admin edits.")
+
 
