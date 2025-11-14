@@ -102,6 +102,8 @@ settings = load_settings()
 # Extract the selected hero/logo file
 settings_logo = settings.get("media", {}).get("hero_image", "")
 settings_logo_path = os.path.join("data", "media", settings_logo) if settings_logo else None
+st.write("DEBUG LOGO PATH:", settings_logo_path)
+st.write("Exists on disk? ->", os.path.exists(settings_logo_path))
 
 
 # Language toggle (scaffold for future FR)
@@ -1044,6 +1046,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
