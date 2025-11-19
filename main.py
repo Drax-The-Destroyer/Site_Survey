@@ -1062,7 +1062,7 @@ def _collect_missing_required(sections: List[Dict[str, Any]], state: Dict[str, A
     return missing
 
 
-if st.button("✅ Submit Survey"):
+if st.button("📄 Generate PDF"):
     # Merge collected inputs into session_state-based answers for validation
     validate_state = dict(st.session_state)
     validate_state.update(answers)
@@ -1195,10 +1195,6 @@ if st.button("✅ Submit Survey"):
         pdf_bytes = buf.getvalue()
 
         # -------- Dynamic PDF filename --------
-        # Track how many PDFs were generated this session (for v2, v3... suffix)
-        counter = st.session_state.get("_pdf_counter", 0) + 1
-        st.session_state["_pdf_counter"] = counter
-
         # Store name (explicit store_name field)
         store_name_raw = get_store_name(validate_state)
 
@@ -1226,20 +1222,20 @@ if st.button("✅ Submit Survey"):
 
         filename_base = " - ".join(parts)
         filename_safe = make_filename_safe(filename_base)
-
-        # Add version suffix if we’ve generated more than once this session
-        if counter > 1:
-            filename_safe = f"{filename_safe} - v{counter}"
-
         file_name = f"{filename_safe}.pdf"
 
-        st.success("Survey submitted successfully! PDF is ready below.")
+
+        st.success(
+            "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
+        )
         st.download_button(
             label="📄 Download PDF Report",
             data=pdf_bytes,
             file_name=file_name,
             mime="application/pdf",
         )
+
+
 
 
 
