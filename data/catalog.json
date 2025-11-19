@@ -21,7 +21,7 @@
           }
         },
         "d3-bnf-w/o-storage-vault": {
-          "label": "D3 SNF w/o Storage Vault",
+          "label": "D3 BNF w/o Storage Vault",
           "category": "smart_safe",
           "dimensions": {
             "weight": "65 kg / 145 lb",
@@ -101,5 +101,6 @@
     }
   }
 }
+
 
 
