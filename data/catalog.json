@@ -20,6 +20,23 @@
             ]
           }
         },
+        "d3-bnf-w/o-storage-vault": {
+          "label": "D3 SNF w/o Storage Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "65 kg / 145 lb",
+            "width": "259 mm / 10.2 in",
+            "depth": "714 mm / 28.13 in",
+            "height": "705 mm / 27.75 in"
+          },
+          "media": {
+            "hero_image": "Tidel-D3-BNF-NoStorageVault_XL_Dimensions.png",
+            "gallery": [],
+            "brochures": [
+              "tidel-d3-family-brochure.pdf"
+            ]
+          }
+        },
         "d4-bnf-w-storage-vault": {
           "label": "D4 BNF w/ Storage Vault",
           "category": "smart_safe",
@@ -84,4 +101,5 @@
     }
   }
 }
+
 
