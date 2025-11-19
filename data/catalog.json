@@ -36,9 +36,7 @@
               "tidel-d4.pdf"
             ]
           }
-        }
-      }
-    },
+        },
         "d4-bnf-w-4-inch-riser": {
           "label": "D4 BNF w/ 4 inch Riser",
           "category": "smart_safe",
@@ -49,7 +47,7 @@
             "height": "457 mm / 18.0 in"
           },
           "media": {
-            "hero_image": "JD_Sports_S4_STD 3.jpg",
+            "hero_image": "tidel-d4-bnf-4in-riser.png",
             "gallery": [],
             "brochures": [
               "tidel-d4.pdf"
@@ -85,7 +83,4 @@
       "models": {}
     }
   }
-
 }
-
-
