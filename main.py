@@ -64,33 +64,38 @@ def make_filename_safe(text: str) -> str:
     txt = " ".join(txt.split())
     return txt
 
+def truncate_for_filename(text: str, max_len: int = 40) -> str:
+    """
+    Truncate text for filenames to a max length.
+    Tries to cut at a word boundary and adds '...' if truncated.
+    """
+    txt = (text or "").strip()
+    if len(txt) <= max_len:
+        return txt
+    cut = txt[:max_len]
+    # Try to cut on a space so we don't chop mid-word
+    last_space = cut.rfind(" ")
+    if last_space > 10:
+        cut = cut[:last_space]
+    return cut + "..."
 
 def get_store_name(state: Dict[str, Any]) -> str:
     """
-    Try to pull the store name out of session/answers by common key names.
-    Falls back to scanning any key that looks like 'store*name'.
+    Prefer the explicit store_name field (it's required in questions.json).
+    Keep a tiny fallback just in case the schema changes later.
     """
-    candidate_keys = [
-        "store_name",
-        "store",
-        "site_name",
-        "location_name",
-        "storename",
-    ]
-    for key in candidate_keys:
-        val = state.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip()
+    val = state.get("store_name")
+    if isinstance(val, str) and val.strip():
+        return val.strip()
 
-    # Fuzzy fallback: any key that has both "store" and "name"
-    for key, val in state.items():
-        if not isinstance(val, str):
-            continue
-        k = str(key).lower()
-        if "store" in k and "name" in k and val.strip():
-            return val.strip()
+    # Tiny fallback if config ever changes
+    for key in ("site_name", "location_name", "store"):
+        v = state.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
 
     return ""
+
 
 def fmt_time(t):
     """Return HH:MM (no seconds) or '' if None/empty."""
@@ -1190,31 +1195,43 @@ if st.button("✅ Submit Survey"):
         pdf_bytes = buf.getvalue()
 
         # -------- Dynamic PDF filename --------
-        # Try to pull store name from current state/answers
-        store_name = get_store_name(validate_state)
+        # Track how many PDFs were generated this session (for v2, v3... suffix)
+        counter = st.session_state.get("_pdf_counter", 0) + 1
+        st.session_state["_pdf_counter"] = counter
+
+        # Store name (explicit store_name field)
+        store_name_raw = get_store_name(validate_state)
 
         # Make/model we already have from the selection
-        make_part = make or ""
-        model_part = normalize_model_for_filename(model or "")
+        make_part_raw = make or ""
+        model_part_raw = normalize_model_for_filename(model or "")
 
-        parts = []
+        # Truncate long pieces for filename friendliness
+        store_part = truncate_for_filename(store_name_raw, max_len=40) if store_name_raw else ""
+        make_part = truncate_for_filename(make_part_raw, max_len=40) if make_part_raw else ""
+        model_part = truncate_for_filename(model_part_raw, max_len=40) if model_part_raw else ""
 
-        # Base prefix
-        parts.append("Site Survey")
+        parts = ["Site Survey"]
 
-        if store_name:
-            parts.append(store_name)
+        if store_part:
+            parts.append(store_part)
         if make_part:
             parts.append(make_part)
         if model_part:
             parts.append(model_part)
 
-        if parts:
-            filename_base = " - ".join(parts)
-            filename_safe = make_filename_safe(filename_base)
-            file_name = f"{filename_safe}.pdf"
-        else:
-            file_name = "site_survey_report.pdf"
+        # Always append date
+        date_str_for_filename = datetime.date.today().strftime("%Y-%m-%d")
+        parts.append(date_str_for_filename)
+
+        filename_base = " - ".join(parts)
+        filename_safe = make_filename_safe(filename_base)
+
+        # Add version suffix if we’ve generated more than once this session
+        if counter > 1:
+            filename_safe = f"{filename_safe} - v{counter}"
+
+        file_name = f"{filename_safe}.pdf"
 
         st.success("Survey submitted successfully! PDF is ready below.")
         st.download_button(
@@ -1223,6 +1240,8 @@ if st.button("✅ Submit Survey"):
             file_name=file_name,
             mime="application/pdf",
         )
+
+
 
 
 
