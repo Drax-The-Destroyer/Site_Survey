@@ -36,6 +36,61 @@ def sanitize(text):
         .decode("latin-1")
     )
 
+def normalize_model_for_filename(text: str) -> str:
+    """
+    Clean up model text for filenames:
+    - expand w/ and w/o
+    - collapse extra spaces
+    """
+    txt = (text or "").strip()
+    if not txt:
+        return ""
+    txt = txt.replace("w/o", "without")
+    txt = txt.replace("w/", "with")
+    return " ".join(txt.split())
+
+
+def make_filename_safe(text: str) -> str:
+    """
+    Remove characters that are illegal/annoying in filenames and normalize spaces.
+    """
+    txt = (text or "").strip()
+    if not txt:
+        return ""
+    bad_chars = '<>:"/\\|?*'
+    for ch in bad_chars:
+        txt = txt.replace(ch, " ")
+    # collapse multiple spaces
+    txt = " ".join(txt.split())
+    return txt
+
+
+def get_store_name(state: Dict[str, Any]) -> str:
+    """
+    Try to pull the store name out of session/answers by common key names.
+    Falls back to scanning any key that looks like 'store*name'.
+    """
+    candidate_keys = [
+        "store_name",
+        "store",
+        "site_name",
+        "location_name",
+        "storename",
+    ]
+    for key in candidate_keys:
+        val = state.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    # Fuzzy fallback: any key that has both "store" and "name"
+    for key, val in state.items():
+        if not isinstance(val, str):
+            continue
+        k = str(key).lower()
+        if "store" in k and "name" in k and val.strip():
+            return val.strip()
+
+    return ""
 
 def fmt_time(t):
     """Return HH:MM (no seconds) or '' if None/empty."""
@@ -1134,13 +1189,42 @@ if st.button("✅ Submit Survey"):
         pdf.output(buf)
         pdf_bytes = buf.getvalue()
 
+        # -------- Dynamic PDF filename --------
+        # Try to pull store name from current state/answers
+        store_name = get_store_name(validate_state)
+
+        # Make/model we already have from the selection
+        make_part = make or ""
+        model_part = normalize_model_for_filename(model or "")
+
+        parts = []
+
+        # Base prefix
+        parts.append("Site Survey")
+
+        if store_name:
+            parts.append(store_name)
+        if make_part:
+            parts.append(make_part)
+        if model_part:
+            parts.append(model_part)
+
+        if parts:
+            filename_base = " - ".join(parts)
+            filename_safe = make_filename_safe(filename_base)
+            file_name = f"{filename_safe}.pdf"
+        else:
+            file_name = "site_survey_report.pdf"
+
         st.success("Survey submitted successfully! PDF is ready below.")
         st.download_button(
             label="📄 Download PDF Report",
             data=pdf_bytes,
-            file_name="site_survey_report.pdf",
+            file_name=file_name,
             mime="application/pdf",
         )
+
+
 
 
 
