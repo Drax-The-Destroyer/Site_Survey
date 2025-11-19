@@ -141,9 +141,9 @@ def _hero_path(filename: str | None):
     
 settings = load_settings()
 
-# # Extract the selected hero/logo file
-# settings_logo = settings.get("media", {}).get("hero_image", "")
-# settings_logo_path = _hero_path(settings_logo)
+# Extract the selected hero/logo file
+settings_logo = settings.get("media", {}).get("hero_image", "")
+settings_logo_path = _hero_path(settings_logo)
 # st.write("DEBUG: settings_logo =", settings_logo)
 # st.write("DEBUG: settings_logo_path =", settings_logo_path)
 
@@ -1063,6 +1063,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
