@@ -214,7 +214,10 @@ settings_logo_path = _hero_path(settings_logo)
 
 
 # Language toggle (scaffold for future FR)
-st.selectbox("Language", ["English"], index=0)
+# lang_choice = st.selectbox("Language", ["English"], index=0)
+# TODO: When adding French or other locales:
+# - replace hardcoded "en" in load_lang("en", version)
+# - map lang_choice -> "en", "fr_qc", etc.
 
 # --- Equipment Selection (Make → Model; Category derived from model) ---
 st.subheader(f"1. {lang_map.get('section.site_info', 'Site Information')}")
@@ -1234,6 +1237,7 @@ if st.button("📄 Generate PDF"):
             file_name=file_name,
             mime="application/pdf",
         )
+
 
 
 
