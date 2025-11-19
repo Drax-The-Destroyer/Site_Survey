@@ -425,36 +425,93 @@ DEFAULT_OPEN_TIME = datetime.time(8, 0)   # 08:00
 DEFAULT_CLOSE_TIME = datetime.time(20, 0) # 20:00 (8 PM)
 TIME_STEP = datetime.timedelta(minutes=30)  # 30-minute increments
 
+# ---------- Quick presets (optional) ----------
+st.markdown("**Quick Setup (optional)**")
+
+qp_cols = st.columns([1.3, 1.3, 1, 1])
+with qp_cols[0]:
+    same_weekdays = st.checkbox("Same hours Mon–Fri", key="same_weekdays")
+with qp_cols[1]:
+    weekend_closed = st.checkbox("Closed Sat & Sun", key="weekend_closed")
+with qp_cols[2]:
+    weekday_open = st.time_input(
+        "Weekday open",
+        value=DEFAULT_OPEN_TIME,
+        key="weekday_open_preset",
+        step=TIME_STEP,
+    )
+with qp_cols[3]:
+    weekday_close = st.time_input(
+        "Weekday close",
+        value=datetime.time(17, 0),  # 5 PM typical
+        key="weekday_close_preset",
+        step=TIME_STEP,
+    )
+
+if st.button("Apply to selected days", key="apply_hours_presets"):
+    # Apply Mon–Fri block
+    if same_weekdays:
+        for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
+            st.session_state[f"open_{d}"] = weekday_open
+            st.session_state[f"close_{d}"] = weekday_close
+            st.session_state[f"closed_{d}"] = False
+    # Close weekend
+    if weekend_closed:
+        for d in ["Saturday", "Sunday"]:
+            st.session_state[f"closed_{d}"] = True
+
+st.markdown("---")
+
+# ---------- Per-day hours w/ Closed checkbox ----------
 hours: Dict[str, Any] = {}
+
 for day in days:
     open_key = f"open_{day}"
     close_key = f"close_{day}"
+    closed_key = f"closed_{day}"
 
     # Seed defaults only once per session
     if open_key not in st.session_state:
         st.session_state[open_key] = DEFAULT_OPEN_TIME
     if close_key not in st.session_state:
         st.session_state[close_key] = DEFAULT_CLOSE_TIME
+    # Default weekends to closed, weekdays to open
+    if closed_key not in st.session_state:
+        st.session_state[closed_key] = day in {"Saturday", "Sunday"}
 
-    cols = st.columns(3)
+    cols = st.columns([1.1, 0.9, 1.5, 1.5])
+
     with cols[0]:
         st.markdown(f"**{day}**")
+
     with cols[1]:
+        closed = st.checkbox("Closed", key=closed_key)
+
+    with cols[2]:
         open_time = st.time_input(
             f"Open {day}",
             key=open_key,
-            step=TIME_STEP,  # 30-min increments
+            step=TIME_STEP,
+            disabled=closed,
         )
-    with cols[2]:
+
+    with cols[3]:
         close_time = st.time_input(
             f"Close {day}",
             key=close_key,
-            step=TIME_STEP,  # 30-min increments
+            step=TIME_STEP,
+            disabled=closed,
         )
 
-    hours[day] = (open_time, close_time)
+    # Store a richer structure so PDF knows about "closed"
+    hours[day] = {
+        "open": None if closed else open_time,
+        "close": None if closed else close_time,
+        "closed": closed,
+    }
 
 answers["hours"] = hours
+
 
 
 # --- Delivery Instructions ---
@@ -647,16 +704,37 @@ def hours_table(pdf, hours_dict):
 
     pdf.set_font("Helvetica", "", 11)
     set_text_color(pdf, (0, 0, 0))
-    for day, (open_t, close_t) in hours_dict.items():
+
+    for day, val in hours_dict.items():
+        # Support both legacy (open_t, close_t) tuple and new dict structure
+        if isinstance(val, dict):
+            closed = bool(val.get("closed", False))
+            open_t = val.get("open")
+            close_t = val.get("close")
+        else:
+            # Old style: (open, close)
+            try:
+                open_t, close_t = val
+            except Exception:
+                open_t, close_t = None, None
+            closed = not (open_t or close_t)
+
         if remaining_height(pdf) < (H_TABLE + 2):
             pdf.add_page()
             day_w, open_w, close_w = _header()
-        o = fmt_time_or_dash(open_t)
-        c = fmt_time_or_dash(close_t)
+
+        if closed:
+            o = "Closed"
+            c = "Closed"
+        else:
+            o = fmt_time_or_dash(open_t)
+            c = fmt_time_or_dash(close_t)
+
         pdf.cell(day_w, H_TABLE, text=sanitize(day))
         pdf.cell(open_w, H_TABLE, text=sanitize(o))
         pdf.cell(close_w, H_TABLE, text=sanitize(c),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
 
 
 def center_image(pdf: FPDF, path: str, max_w: float = None, max_h: float = None, y_top: float = None):
@@ -1063,6 +1141,7 @@ if st.button("✅ Submit Survey"):
             file_name="site_survey_report.pdf",
             mime="application/pdf",
         )
+
 
 
 
