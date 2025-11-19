@@ -39,6 +39,26 @@
         }
       }
     },
+
+        "d4-bnf-w-4-inch-riser": {
+          "label": "D4 BNF w/ 4" Riser",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "48 kg / 106 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "457 mm / 18.0 in"
+          },
+          "media": {
+            "hero_image": "JD_Sports_S4_STD 3.jpg",
+            "gallery": [],
+            "brochures": [
+              "tidel-d4.pdf"
+            ]
+          }
+        }
+      }
+    },
     "kisan": {
       "label": "Kisan",
       "models": {
@@ -66,4 +86,5 @@
       "models": {}
     }
   }
+
 }
