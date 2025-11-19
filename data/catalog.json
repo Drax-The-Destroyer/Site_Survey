@@ -39,7 +39,6 @@
         }
       }
     },
-
         "d4-bnf-w-4-inch-riser": {
           "label": "D4 BNF w/ 4 inch Riser",
           "category": "smart_safe",
@@ -88,4 +87,5 @@
   }
 
 }
+
 
