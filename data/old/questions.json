@@ -1,0 +1,411 @@
+{
+  "base_sections": [
+    {
+      "key": "contact_info",
+      "title_key": "section.contact_info",
+      "fields": [
+        {
+          "name": "company",
+          "label_key": "field.company",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "contact",
+          "label_key": "field.contact",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "address",
+          "label_key": "field.address",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "phone",
+          "label_key": "field.phone",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "email",
+          "label_key": "field.email",
+          "type": "text",
+          "required": false
+        }
+      ]
+    },
+    {
+      "key": "delivery_base",
+      "title_key": "section.delivery",
+      "fields": [
+        {
+          "name": "days_prior",
+          "label_key": "field.days_prior",
+          "type": "text"
+        },
+        {
+          "name": "storage_space",
+          "label_key": "field.storage_space",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "loading_dock",
+          "label_key": "field.loading_dock",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "delivery_hours",
+          "label_key": "field.delivery_hours",
+          "type": "text"
+        },
+        {
+          "name": "delivery_loc",
+          "label_key": "field.delivery_loc",
+          "type": "radio",
+          "options": [
+            "Front of store",
+            "Back of store"
+          ]
+        },
+        {
+          "name": "path_desc",
+          "label_key": "field.path_desc",
+          "type": "textarea"
+        },
+        {
+          "name": "use_dolly",
+          "label_key": "field.use_dolly",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "staircase_notes",
+          "label_key": "field.staircase_notes",
+          "type": "textarea"
+        },
+        {
+          "name": "elevator_notes",
+          "label_key": "field.elevator_notes",
+          "type": "textarea"
+        },
+        {
+          "name": "delivery_notes",
+          "label_key": "field.delivery_notes",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "key": "installation_location",
+      "title_key": "section.installation_location",
+      "fields": [
+        {
+          "name": "floor_scan",
+          "label_key": "field.floor_scan",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "download_speed",
+          "label_key": "field.download_speed",
+          "type": "text"
+        },
+        {
+          "name": "upload_speed",
+          "label_key": "field.upload_speed",
+          "type": "text"
+        },
+        {
+          "name": "door_size",
+          "label_key": "field.door_size",
+          "type": "text"
+        },
+        {
+          "name": "room_size",
+          "label_key": "field.room_size",
+          "type": "text"
+        },
+        {
+          "name": "sufficient_space",
+          "label_key": "field.sufficient_space",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "floor_type",
+          "label_key": "field.floor_type",
+          "type": "radio",
+          "options": [
+            "Concrete",
+            "Wood",
+            "Raised floor",
+            "Other"
+          ]
+        },
+        {
+          "name": "other_floor_type",
+          "label_key": "field.other_floor_type",
+          "type": "text",
+          "visible_if": {
+            "all": [
+              {
+                "field": "floor_type",
+                "op": "eq",
+                "value": "Other"
+              }
+            ]
+          }
+        },
+        {
+          "name": "other_safe",
+          "label_key": "field.other_safe",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "safe_type",
+          "label_key": "field.safe_type",
+          "type": "text",
+          "visible_if": {
+            "all": [
+              {
+                "field": "other_safe",
+                "op": "eq",
+                "value": "Yes"
+              }
+            ]
+          }
+        },
+        {
+          "name": "network",
+          "label_key": "field.network",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "network_distance",
+          "label_key": "field.network_distance",
+          "type": "text",
+          "visible_if": {
+            "all": [
+              {
+                "field": "network",
+                "op": "eq",
+                "value": "Yes"
+              }
+            ]
+          }
+        },
+        {
+          "name": "water_distance",
+          "label_key": "field.water_distance",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "power",
+          "label_key": "field.power",
+          "type": "radio",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "name": "install_notes",
+          "label_key": "field.install_notes",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "key": "site_info",
+      "title_key": "section.site_info",
+      "fields": [
+        {
+          "name": "store_name",
+          "label_key": "field.store_name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "store_hours",
+          "label_key": "field.store_hours",
+          "type": "time"
+        },
+        {
+          "name": "path_desc",
+          "label_key": "field.path_desc",
+          "type": "textarea"
+        }
+      ]
+    }
+  ],
+  "category_packs": {
+    "Smart Safe": [
+      {
+        "key": "smart_safe_additions",
+        "title_key": "section.delivery",
+        "fields": [
+          {
+            "name": "stairs_count",
+            "label_key": "field.stairs_count",
+            "type": "number",
+            "visible_if": {
+              "any": [
+                {
+                  "field": "loading_dock",
+                  "op": "eq",
+                  "value": "No"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "Recycler": [
+      {
+        "key": "power_network",
+        "title_key": "section.power_network",
+        "fields": [
+          {
+            "name": "has_ethernet",
+            "label_key": "field.has_ethernet",
+            "type": "radio",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "required": true
+          },
+          {
+            "name": "ethernet_distance_m",
+            "label_key": "field.ethernet_distance_m",
+            "type": "number",
+            "visible_if": {
+              "all": [
+                {
+                  "field": "has_ethernet",
+                  "op": "eq",
+                  "value": "Yes"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "Dispenser": []
+  },
+  "overrides": {
+    "*": {
+      "required": [
+        "store_name"
+      ],
+      "defaults": {
+        "loading_dock": "No"
+      },
+      "hide_fields": [],
+      "insert_after": []
+    },
+    "category:Smart Safe": {
+      "required": [
+        "loading_dock"
+      ],
+      "insert_after": [
+        {
+          "after": "path_desc",
+          "field": {
+            "name": "stairs_required",
+            "label_key": "field.stairs_required",
+            "type": "radio",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "default": "No"
+          }
+        }
+      ]
+    },
+    "make:Kisan": {
+      "hide_fields": [
+        "stairs_required"
+      ]
+    },
+    "model:TiDel|D4": {
+      "defaults": {
+        "stairs_required": "Yes"
+      }
+    }
+  },
+  "smart_safe": {
+    "Delivery": [
+      {
+        "key": "test-question",
+        "label": "Test Question?",
+        "type": "radio",
+        "required": true,
+        "options": [
+          "Yes/No"
+        ]
+      },
+      {
+        "key": "this-is-a-test-question",
+        "label": "This is a test question?",
+        "type": "radio",
+        "required": true,
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "key": "this-is-another-test-question-",
+        "label": "This is another test question?",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "this_test_might_work",
+        "label": "This test might work?",
+        "type": "radio",
+        "required": false,
+        "options": [
+          "Yes",
+          "No",
+          "Maybe"
+        ]
+      }
+    ]
+  }
+}
