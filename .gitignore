@@ -1,17 +1,17 @@
 # Python
 __pycache__/
-*.py[cod]
-*.egg-info/
+*.pyc
+
+# Local venv
 .venv/
-venv/
-env/
-ENV/
 
-# Streamlit
-.streamlit/secrets.toml
+# Streamlit cache/config
+.streamlit/
 
-# OS/editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# Old backups you don't want in the repo
+old/
+data/old/
+pages/old/
+
+# Office temp files
+~$*.docx
