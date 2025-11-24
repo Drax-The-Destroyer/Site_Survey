@@ -15,6 +15,7 @@ from data_loader import (
     load_questions,
     load_lang,
     get_data_version,
+    load_media_index, 
 )
 from overrides import merge_overrides
 from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults, normalize_admin_fields  # newly added helper
@@ -144,6 +145,10 @@ st.title("📋 Site Survey Form")
 
 # Load data-driven resources
 version = get_data_version()
+
+# 🔁 Always rebuild media index so index.json matches assets/ + data/media
+media_index = load_media_index()
+
 catalog = load_catalog(version)
 qdef = load_questions(version)
 lang_map = load_lang("en", version)
@@ -313,31 +318,41 @@ st.markdown(f"**Height:** {model_height}")
 # ✅ Responsive hero image without breaking st.image
 st.markdown("""
 <style>
-.hero-wrap { display:flex; justify-content:center; }
+.hero-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
 .hero-wrap img {
+  display: block;
   width: 100% !important;
   height: auto !important;
-  display: block;
+  max-width: 600px !important;  /* hard cap on desktop */
 }
+
 /* Phone */
 @media (max-width: 480px) {
-  .hero-wrap img { max-width: 95vw !important; }
+  .hero-wrap img {
+    max-width: 95vw !important;
+  }
 }
+
 /* Tablet */
 @media (min-width: 481px) and (max-width: 1024px) {
-  .hero-wrap img { max-width: 720px !important; }
-}
-/* Desktop+ */
-@media (min-width: 1025px) {
-  .hero-wrap img { max-width: 820px !important; }
+  .hero-wrap img {
+    max-width: 480px !important;
+  }
 }
 </style>
 """, unsafe_allow_html=True)
 
+
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
-    st.image(image_path, caption=f"{make} {model}")
+    # hard cap the width; Streamlit will scale down, not up
+    st.image(image_path, caption=f"{make} {model}", width=600)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 # Prepare composed sections for current selection
 base_sections = qdef.get("base_sections", [])
