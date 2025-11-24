@@ -1,43 +1,107 @@
 {
-    "section.site_info": "Site Information",
-    "section.delivery": "Delivery Instructions",
-    "section.power_network": "Power & Network",
-    "section.contact_info": "Contact Information",
-    "section.installation_location": "Installation Location",
-    "field.store_name": "Store Name",
-    "field.store_hours": "Store Hours",
-    "field.path_desc": "Describe the path from loading area to install location",
-    "field.loading_dock": "Is there a loading dock?",
-    "field.stairs_required": "Are stairs required on the path?",
-    "field.stairs_count": "How many stairs on the path?",
-    "field.has_ethernet": "Is Ethernet available at the install location?",
-    "field.ethernet_distance_m": "Approx. cable distance (m)",
-    "field.company": "Company Name",
-    "field.contact": "Contact Name",
-    "field.address": "Address",
-    "field.phone": "Contact Phone #",
-    "field.email": "Contact Email",
-    "field.days_prior": "How many days prior to installation can the safe be delivered?",
-    "field.storage_space": "Is there space to store the safe?",
-    "field.delivery_hours": "Delivery Hours",
-    "field.delivery_loc": "Delivery Location",
-    "field.use_dolly": "Can a dolly be used to move the equipment?",
-    "field.staircase_notes": "Describe door sizes, staircases (steps, turns, landings), etc.",
-    "field.elevator_notes": "Elevators (capacity, door size, dimensions)",
-    "field.delivery_notes": "Additional delivery instructions or comments",
-    "field.floor_scan": "Is a Floor Scan required?",
-    "field.download_speed": "Speedtest Download (turn off 5G, use Bell)",
-    "field.upload_speed": "Speedtest Upload",
-    "field.door_size": "Door size",
-    "field.room_size": "Room size (Length x Width x Height)",
-    "field.sufficient_space": "Is there sufficient space for the safe? (Need 30 inches height)",
-    "field.floor_type": "Floor/Subfloor type",
-    "field.other_floor_type": "Other floor type (if applicable)",
-    "field.other_safe": "Is there another safe in the same room?",
-    "field.safe_type": "If yes, what kind?",
-    "field.network": "Is there a network connection available?",
-    "field.network_distance": "If yes, how far from the install location?",
-    "field.water_distance": "Is the safe being installed 6 feet away from water?",
-    "field.power": "Is there a power outlet within 4 feet of the unit?",
-    "field.install_notes": "Describe the installation and include any notes"
+  "section.site_info": "Site Information",
+  "section.delivery": "Delivery Instructions",
+  "section.power_network": "Power & Network",
+  "section.contact_info": "Contact Information",
+  "section.installation_location": "Installation Location",
+
+  "field.store_name": "Store Name",
+  "field.store_hours": "Store Hours",
+  "field.path_desc": "Describe the equipment path from the entry point of the building to the safe’s final stored location",
+
+  "field.loading_dock": "Is there a loading dock?",
+  "field.stairs_required": "Are stairs required on the path?",
+  "field.stairs_count": "How many stairs on the path?",
+  "field.has_ethernet": "Is Ethernet available at the install location?",
+  "field.ethernet_distance_m": "Approx. cable distance (m)",
+
+  "field.company": "Company Name",
+  "field.contact": "Contact Name",
+  "field.address": "Address",
+  "field.phone": "Contact Phone #",
+  "field.email": "Contact Email",
+
+  "field.days_prior": "How many days prior to installation can the safe be delivered?",
+  "field.storage_space": "Is there space to store the safe after delivery until it is installed?",
+  "field.storage_space_where": "If yes, where will the safe be stored?",
+  "field.delivery_hours": "Delivery Hours",
+
+  "field.delivery_loc": "Delivery Location",
+  "field.delivery_loc_front": "Delivery location: Front of building?",
+  "field.delivery_loc_back": "Delivery location: Back of building?",
+  "field.delivery_loc_other": "Delivery location: Other?",
+  "field.delivery_loc_other_desc": "If other, describe the delivery location.",
+
+  "field.staircase_notes": "Describe door sizes, staircases (steps, turns, landings), etc.",
+  "field.elevator_notes": "Elevators (capacity, door size, dimensions)",
+  "field.delivery_notes": "Additional delivery instructions or comments",
+
+  "field.storage_floor_number": "What floor number is the safe to be stored on?",
+  "field.storage_path_steps": "Are there steps on the path to the storage location?",
+  "field.storage_path_stairs": "Are there stairs on the path to the storage location?",
+  "field.storage_path_ramps": "Are there ramps on the path to the storage location?",
+
+  "field.elevator_available": "Is there an elevator that can be used for delivery?",
+  "field.elevator_capacity": "Elevator maximum capacity (kg/lb)",
+  "field.elevator_door_size": "Elevator door size",
+  "field.elevator_dimensions": "Elevator interior dimensions (length x width x height)",
+
+  "field.lift_gate_required": "If there is no loading dock, will the delivery truck need a lift gate?",
+
+  "field.delivery_floor_desc": "Describe the flooring along the delivery path.",
+  "field.delivery_weight_restrictions": "Are there any weight restrictions to moving the safe along the delivery path?",
+  "field.delivery_method_pallet_jack": "Can a pallet jack be used to move the safe on the delivery path?",
+  "field.delivery_method_dolly": "Can a dolly be used to move the safe on the delivery path?",
+  "field.delivery_method_hand_truck": "Can a hand truck be used to move the safe on the delivery path?",
+  "field.min_door_width": "What is the minimum door width for delivery?",
+  "field.delivery_path_photos": "Have you attached photos of the delivery path?",
+
+  "field.floor_scan": "Is a Floor Scan required?",
+  "field.download_speed": "Speedtest Download (turn off 5G, use Bell)",
+  "field.upload_speed": "Speedtest Upload",
+
+  "field.door_size": "What is the smallest door size to get the safe from its stored location to the install location?",
+  "field.room_size": "What is the room size (length, width, and height)?",
+  "field.sufficient_space": "Is there sufficient space for the safe? (Minimum required space: Height 30 in, Width 16 in, Length 30 in)",
+
+  "field.floor_type": "Floor type at installation location",
+  "field.other_floor_type": "Other floor type (if applicable)",
+  "field.subfloor_type": "Subfloor type",
+
+  "field.other_safe": "Is there any existing safe that will interfere with the Tidel safe’s operation?",
+  "field.safe_type": "If there is an existing safe, describe it and its location.",
+  "field.safe_to_remove": "Is there any existing safe that must be removed to make room for the Tidel safe?",
+
+  "field.network": "Is there a nearby network jack for an Ethernet connection (if required)?",
+  "field.network_distance": "If yes, how far is the network jack from the safe installation location?",
+
+  "field.water_distance": "Will the safe be installed 6 feet away from a water source?",
+  "field.power": "Are there at least 2 power outlets available within 6 feet of the safe?",
+
+  "field.install_notes": "Describe the installation area and add any additional notes or observations. Reference any photos taken.",
+
+  "field.storage_to_install_distance": "How far is the safe stored from the installation location?",
+  "field.storage_different_floor": "Is the safe stored on a different floor number?",
+
+  "field.install_path_steps": "Are there steps on the path from the stored location to the installation location?",
+  "field.install_path_stairs": "Are there stairs on the path from the stored location to the installation location?",
+  "field.install_path_ramps": "Are there ramps on the path from the stored location to the installation location?",
+
+  "field.install_move_sliding": "Can the safe be slid by hand to the installation location?",
+  "field.install_move_pallet_jack": "Can a pallet jack be used to move the safe to the installation location?",
+  "field.install_move_dolly": "Can a dolly be used to move the safe to the installation location?",
+  "field.install_move_hand_truck": "Can a hand truck be used to move the safe to the installation location?",
+
+  "field.install_near_heaters": "Will the safe be installed near any heaters or radiators?",
+
+  "field.drilling_restrictions": "Are there any restrictions to drilling into the floor?",
+  "field.drilling_restrictions_details": "If there are restrictions to drilling or a Floor Scan is required, describe them.",
+
+  "field.embedded_power_line": "Are there any embedded power lines in the floor?",
+  "field.embedded_water_pipe": "Are there any embedded water pipes in the floor?",
+  "field.embedded_sewer_pipe": "Are there any embedded sewer pipes in the floor?",
+  "field.embedded_heated_floors": "Are there embedded heated floors?",
+
+  "field.drilling_before_open": "Must drilling be done before the store opens?",
+  "field.drilling_during_hours": "Can drilling be done during regular business hours?"
 }
