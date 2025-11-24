@@ -1,30 +1,102 @@
 {
   "images": {
+    "cima_diamonte.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\cima_diamonte.png",
+      "ts": 1761834783.7375357
+    },
+    "cima_platino.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\cima_platino.png",
+      "ts": 1761835330.541448
+    },
+    "JD_Sports_S4_STD_riser.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\JD_Sports_S4_STD_riser.png",
+      "ts": 1763569203.9423575
+    },
+    "kisan_k6.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\kisan_k6.png",
+      "ts": 1761834439.847817
+    },
+    "Tidel-D3-BNF-NoStorageVault_STD&XL_Dimensions.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-BNF-NoStorageVault_STD&XL_Dimensions.jpg",
+      "ts": 1763996565.1975286
+    },
+    "Tidel-D3-BNF-NoStorageVault_XL_Dimensions.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-BNF-NoStorageVault_XL_Dimensions.png",
+      "ts": 1763571639.4716647
+    },
+    "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-NoStorageVault_STD_Dimensions.jpg",
+      "ts": 1763996565.4901488
+    },
+    "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
+      "ts": 1763999467.026615
+    },
+    "Tidel-D3-SNF-NoStorageVault_XL_Dimensions.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-NoStorageVault_XL_Dimensions.jpg",
+      "ts": 1763996565.406982
+    },
+    "Tidel-D3-SNF-NoStorageVault_XL_Dimensions.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-NoStorageVault_XL_Dimensions.png",
+      "ts": 1763999487.267556
+    },
+    "Tidel-D3-SNF-StorageVault_STD_Dimensions.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-StorageVault_STD_Dimensions.jpg",
+      "ts": 1763996565.446032
+    },
+    "Tidel-D3-SNF-StorageVault_STD_Dimensions.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D3-SNF-StorageVault_STD_Dimensions.png",
+      "ts": 1763999506.1967056
+    },
+    "Tidel-D4-D4e-BNF_NoStorageVault_STD.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D4-D4e-BNF_NoStorageVault_STD.jpg",
+      "ts": 1763996565.520538
+    },
+    "Tidel-D4-D4e-BNF_NoStorageVault_STD.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D4-D4e-BNF_NoStorageVault_STD.png",
+      "ts": 1763999523.63331
+    },
+    "Tidel-D4-D4e-BNF_NoStorageVault_XL.jpg": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D4-D4e-BNF_NoStorageVault_XL.jpg",
+      "ts": 1763996565.5478864
+    },
+    "Tidel-D4-D4e-BNF_NoStorageVault_XL.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\Tidel-D4-D4e-BNF_NoStorageVault_XL.png",
+      "ts": 1763999540.570328
+    },
+    "tidel_d3.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\tidel_d3.png",
+      "ts": 1761076771.4307632
+    },
+    "tidel_d4.png": {
+      "path": "C:\\Python Projects\\Site Survey\\assets\\tidel_d4.png",
+      "ts": 1761339884.2483885
+    },
     "kisan-newton-3.png": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\kisan-newton-3.png",
-      "ts": 1761837695.2845876
+      "ts": 1761837695.2832303
     },
     "tidel-d3.png": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d3.png",
-      "ts": 1761841652.6732278
+      "ts": 1761841652.6726685
     },
     "tidel-d4.png": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d4.png",
-      "ts": 1762443755.959148
+      "ts": 1762443755.9588041
     }
   },
   "brochures": {
     "newton3-catalogue.pdf": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\newton3-catalogue.pdf",
-      "ts": 1761836553.6286972
+      "ts": 1761836553.6270213
     },
     "tidel-d3-family-brochure.pdf": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d3-family-brochure.pdf",
-      "ts": 1761841641.2633624
+      "ts": 1761841641.2630582
     },
     "tidel-d4.pdf": {
       "path": "C:\\Python Projects\\Site Survey\\data\\media\\tidel-d4.pdf",
-      "ts": 1762443787.6820157
+      "ts": 1762443787.6816936
     }
   }
 }
