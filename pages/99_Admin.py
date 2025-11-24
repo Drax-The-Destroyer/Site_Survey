@@ -19,7 +19,7 @@
 # )
 
 
-# File: pages/10_Admin.py
+# File: pages/99_Admin.py
 """
 Admin Console for the Site Survey Web App (Streamlit)
 
@@ -51,6 +51,14 @@ from typing import Dict, List, Any, Optional, Tuple
 import pandas as pd
 import streamlit as st
 from app.ui import wide_button
+
+from data_loader import (
+    load_catalog,
+    load_questions,
+    load_lang,
+    get_data_version,
+    load_media_index,   # NEW
+)
 
 
 # Simple password (can be overridden by secrets or env later if you want)
@@ -101,6 +109,30 @@ VERSION_FP = os.path.join(DATA_DIR, "version.json")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(MEDIA_DIR, exist_ok=True)
+
+
+def resolve_image_path(filename: str) -> Optional[str]:
+    """
+    Try to locate an image by filename in data/media, assets, or common
+    cloud mount paths. Returns an absolute path or None.
+    """
+    if not filename:
+        return None
+    base = os.path.basename(filename)
+
+    candidates = [
+        os.path.join(MEDIA_DIR, base),                          # data/media (Admin uploads)
+        os.path.join("assets", base),                           # local assets folder
+        os.path.join("/mount/src/site_survey/data/media", base),  # Streamlit Cloud paths
+        os.path.join("/mount/src/site_survey/assets", base),
+        os.path.join("/mount/src/data/media", base),
+    ]
+
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
 
 # ---- File I/O helpers (atomic-ish writes) ----
 
@@ -1010,35 +1042,39 @@ with TAB[3]:
             )
 
             # Preview hero
+            # Preview hero
             if hero:
                 st.caption("Hero preview:")
-                try:
-                    st.image(os.path.join(MEDIA_DIR, hero))
-                except Exception:
-                    st.warning(
-                        "Hero image not found on disk; it is in index but missing on filesystem.")
+                img_path = resolve_image_path(hero)
+                if img_path:
+                    st.image(img_path, width=250)
+                else:
+                    st.warning(f"Hero image not found on disk: {hero}")
+
 
             # --- Gallery thumbnails preview ---
             if gallery:
                 st.caption("Gallery preview:")
-                # up to 4 across
                 cols = st.columns(min(4, max(1, len(gallery))))
                 for i, fname in enumerate(gallery):
-                    fpath = os.path.join(MEDIA_DIR, fname)
+                    fpath = resolve_image_path(fname)
                     with cols[i % len(cols)]:
-                        try:
-                            with open(fpath, "rb") as f:
-                                img_bytes = f.read()
-                            # omit width/use_container_width to avoid deprecation warnings
-                            st.image(img_bytes, caption=fname)
-                            st.download_button(
-                                "Download",
-                                data=img_bytes,
-                                file_name=fname,
-                                key=f"dl_img_{fname}",
-                            )
-                        except Exception:
+                        if fpath and os.path.exists(fpath):
+                            try:
+                                with open(fpath, "rb") as f:
+                                    img_bytes = f.read()
+                                st.image(img_bytes, caption=fname, width=250)
+                                st.download_button(
+                                    "Download",
+                                    data=img_bytes,
+                                    file_name=fname,
+                                    key=f"dl_img_{fname}",
+                                )
+                            except Exception:
+                                st.warning(f"Error reading: {fname}")
+                        else:
                             st.warning(f"Missing: {fname}")
+
 
             # --- Brochures list with download buttons ---
             if brochures:
