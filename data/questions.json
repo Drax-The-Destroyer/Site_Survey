@@ -5,20 +5,8 @@
       "title_key": "section.contact_info",
       "fields": [
         {
-          "name": "company",
-          "label_key": "field.company",
-          "type": "text",
-          "required": false
-        },
-        {
           "name": "contact",
           "label_key": "field.contact",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "address",
-          "label_key": "field.address",
           "type": "text",
           "required": false
         },
@@ -52,7 +40,8 @@
           "options": [
             "Yes",
             "No"
-          ]
+          ],
+          "default": ""
         },
         {
           "name": "storage_space_where",
@@ -74,30 +63,13 @@
           "type": "text"
         },
         {
-          "name": "delivery_loc_front",
-          "label_key": "field.delivery_loc_front",
-          "type": "radio",
+          "name": "delivery_location",
+          "label_key": "field.delivery_location",
+          "type": "multiselect",
           "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "delivery_loc_back",
-          "label_key": "field.delivery_loc_back",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "delivery_loc_other",
-          "label_key": "field.delivery_loc_other",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
+            "Front",
+            "Back",
+            "Other"
           ]
         },
         {
@@ -105,11 +77,11 @@
           "label_key": "field.delivery_loc_other_desc",
           "type": "text",
           "visible_if": {
-            "all": [
+            "any": [
               {
-                "field": "delivery_loc_other",
-                "op": "eq",
-                "value": "Yes"
+                "field": "delivery_location",
+                "op": "contains",
+                "value": "Other"
               }
             ]
           }
@@ -119,80 +91,26 @@
           "label_key": "field.storage_floor_number",
           "type": "text"
         },
-        {
-          "name": "storage_path_steps",
-          "label_key": "field.storage_path_steps",
-          "type": "radio",
+       {
+          "name": "storage_path_obstacles",
+          "label_key": "field.storage_path_obstacles",
+          "type": "multiselect",
           "options": [
-            "Yes",
-            "No"
+            "Stairs",
+            "Ramps"
           ]
         },
         {
-          "name": "storage_path_stairs",
-          "label_key": "field.storage_path_stairs",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "storage_path_ramps",
-          "label_key": "field.storage_path_ramps",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "elevator_available",
-          "label_key": "field.elevator_available",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "elevator_capacity",
-          "label_key": "field.elevator_capacity",
-          "type": "text",
+          "name": "storage_path_stairs_count",
+          "label_key": "field.storage_path_stairs_count",
+          "type": "number",
+          "required": false,
           "visible_if": {
-            "all": [
+            "any": [
               {
-                "field": "elevator_available",
-                "op": "eq",
-                "value": "Yes"
-              }
-            ]
-          }
-        },
-        {
-          "name": "elevator_door_size",
-          "label_key": "field.elevator_door_size",
-          "type": "text",
-          "visible_if": {
-            "all": [
-              {
-                "field": "elevator_available",
-                "op": "eq",
-                "value": "Yes"
-              }
-            ]
-          }
-        },
-        {
-          "name": "elevator_dimensions",
-          "label_key": "field.elevator_dimensions",
-          "type": "text",
-          "visible_if": {
-            "all": [
-              {
-                "field": "elevator_available",
-                "op": "eq",
-                "value": "Yes"
+                "field": "storage_path_obstacles",
+                "op": "contains",
+                "value": "Stairs"
               }
             ]
           }
@@ -202,27 +120,9 @@
           "label_key": "field.loading_dock",
           "type": "radio",
           "options": [
-            "Yes",
-            "No"
+            "Has loading dock",
+            "No dock – lift gate required"
           ]
-        },
-        {
-          "name": "lift_gate_required",
-          "label_key": "field.lift_gate_required",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "visible_if": {
-            "all": [
-              {
-                "field": "loading_dock",
-                "op": "eq",
-                "value": "No"
-              }
-            ]
-          }
         },
         {
           "name": "delivery_floor_desc",
@@ -238,31 +138,14 @@
             "No"
           ]
         },
-        {
-          "name": "delivery_method_pallet_jack",
-          "label_key": "field.delivery_method_pallet_jack",
-          "type": "radio",
+       {
+          "name": "delivery_method",
+          "label_key": "field.delivery_method",
+          "type": "multiselect",
           "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "delivery_method_dolly",
-          "label_key": "field.delivery_method_dolly",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "delivery_method_hand_truck",
-          "label_key": "field.delivery_method_hand_truck",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
+            "Pallet Jack",
+            "Dolly",
+            "Hand Truck"
           ]
         },
         {
@@ -305,66 +188,39 @@
           ]
         },
         {
-          "name": "install_path_steps",
-          "label_key": "field.install_path_steps",
-          "type": "radio",
+          "name": "install_path_obstacles",
+          "label_key": "field.install_path_obstacles",
+          "type": "multiselect",
           "options": [
-            "Yes",
-            "No"
+            "Steps",
+            "Stairs",
+            "Ramps"
           ]
         },
         {
-          "name": "install_path_stairs",
-          "label_key": "field.install_path_stairs",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
+          "name": "install_path_stairs_count",
+          "label_key": "field.install_path_stairs_count",
+          "type": "number",
+          "required": false,
+          "visible_if": {
+            "any": [
+              {
+                "field": "install_path_obstacles",
+                "op": "contains",
+                "value": "Stairs"
+              }
+            ]
+          }
         },
         {
-          "name": "install_path_ramps",
-          "label_key": "field.install_path_ramps",
-          "type": "radio",
+          "name": "install_move_methods",
+          "label_key": "field.install_move_methods",
+          "type": "multiselect",
           "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "install_move_sliding",
-          "label_key": "field.install_move_sliding",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "install_move_pallet_jack",
-          "label_key": "field.install_move_pallet_jack",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "install_move_dolly",
-          "label_key": "field.install_move_dolly",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "install_move_hand_truck",
-          "label_key": "field.install_move_hand_truck",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
+            "Sliding",
+            "Pallet jack",
+            "Dolly",
+            "Hand truck"
           ]
         },
         {
@@ -460,76 +316,8 @@
           ]
         },
         {
-          "name": "drilling_restrictions_details",
-          "label_key": "field.drilling_restrictions_details",
-          "type": "textarea",
-          "visible_if": {
-            "any": [
-              {
-                "field": "drilling_restrictions",
-                "op": "eq",
-                "value": "Yes"
-              },
-              {
-                "field": "floor_scan",
-                "op": "eq",
-                "value": "Yes"
-              }
-            ]
-          }
-        },
-        {
-          "name": "embedded_power_line",
-          "label_key": "field.embedded_power_line",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No",
-            "Unknown"
-          ]
-        },
-        {
-          "name": "embedded_water_pipe",
-          "label_key": "field.embedded_water_pipe",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No",
-            "Unknown"
-          ]
-        },
-        {
-          "name": "embedded_sewer_pipe",
-          "label_key": "field.embedded_sewer_pipe",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No",
-            "Unknown"
-          ]
-        },
-        {
-          "name": "embedded_heated_floors",
-          "label_key": "field.embedded_heated_floors",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No",
-            "Unknown"
-          ]
-        },
-        {
           "name": "drilling_before_open",
           "label_key": "field.drilling_before_open",
-          "type": "radio",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "name": "drilling_during_hours",
-          "label_key": "field.drilling_during_hours",
           "type": "radio",
           "options": [
             "Yes",
@@ -615,6 +403,12 @@
           "name": "install_notes",
           "label_key": "field.install_notes",
           "type": "textarea"
+        },
+        {
+          "name": "technician_name",
+          "label_key": "field.technician_name",
+          "type": "text",
+          "required": true
         }
       ]
     },
@@ -629,14 +423,40 @@
           "required": true
         },
         {
-          "name": "store_hours",
-          "label_key": "field.store_hours",
-          "type": "time"
+          "name": "site_id",
+          "label_key": "field.site_id",
+          "type": "text",
+          "required": false
         },
         {
-          "name": "path_desc",
-          "label_key": "field.path_desc",
-          "type": "textarea"
+          "name": "company",
+          "label_key": "field.company",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "address_line1",
+          "label_key": "field.address_line1",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "city",
+          "label_key": "field.city",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "province",
+          "label_key": "field.province",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "store_hours",
+          "label_key": "field.store_hours",
+          "type": "time",
+          "required": false
         }
       ]
     }
@@ -723,8 +543,7 @@
             "options": [
               "Yes",
               "No"
-            ],
-            "default": "No"
+            ]
           }
         }
       ]

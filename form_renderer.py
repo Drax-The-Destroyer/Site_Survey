@@ -227,15 +227,18 @@ def render_section(
                 default_index = options.index(answers[name])
             elif "default" in field and field["default"] in options:
                 default_index = options.index(field["default"])
-            else:
-                default_index = 0 if options else None
+            # else: leave default_index as None
 
-            if options and default_index is not None:
-                val = st.radio(label_to_show, options=options, index=default_index,
-                               horizontal=False, help=help_text, key=key)
+            if options:
+                if default_index is not None:
+                    val = st.radio(label_to_show, options=options, index=default_index,
+                                horizontal=False, help=help_text, key=key)
+                else:
+                    val = st.radio(label_to_show, options=options, index=None,
+                                horizontal=False, help=help_text, key=key)
             else:
                 val = st.radio(label_to_show, options=[],
-                               help=help_text, key=key)
+                            help=help_text, key=key)
             answers[name] = val
 
         elif ftype == "time":
