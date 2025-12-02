@@ -912,15 +912,37 @@ def build_survey_pdf(
 
     # --- Photos: one per page ---
     if accepted_photos:
-        for photo in accepted_photos[: max_count]:
+        for photo_entry in accepted_photos[: max_count]:
             temp_path: Optional[str] = None
             try:
                 pdf.add_page()
                 section_header(pdf, "Site Survey Photo")
-                img = Image.open(photo).convert("RGB")
-                temp_path = f"temp_{photo.name}.jpg"
-                img.save(temp_path, format="JPEG")
-                img.close()
+
+                # Support both legacy UploadedFile objects and the new optimized
+                # dict shape: {"name": str, "data": jpeg_bytes}
+                img_obj: Optional[Image.Image] = None
+                display_name: str = "photo"
+
+                if isinstance(photo_entry, dict):
+                    display_name = str(photo_entry.get("name") or "photo")
+                    raw_bytes = photo_entry.get("data")
+                    if isinstance(raw_bytes, (bytes, bytearray)):
+                        img_obj = Image.open(BytesIO(raw_bytes)).convert("RGB")
+                    else:
+                        # Fallback for any future shapes (e.g., file-like)
+                        if raw_bytes is not None:
+                            img_obj = Image.open(raw_bytes).convert("RGB")
+                else:
+                    # Legacy path: photo_entry is a Streamlit UploadedFile
+                    display_name = getattr(photo_entry, "name", "photo")
+                    img_obj = Image.open(photo_entry).convert("RGB")
+
+                if img_obj is None:
+                    raise RuntimeError("Unable to open image for PDF rendering")
+
+                temp_path = f"temp_{display_name}.jpg"
+                img_obj.save(temp_path, format="JPEG")
+                img_obj.close()
 
                 y_top = pdf.get_y()
                 max_w = pdf.w - pdf.l_margin - pdf.r_margin
@@ -932,7 +954,7 @@ def build_survey_pdf(
                 pdf.cell(
                     0,
                     H_ROW,
-                    text=sanitize(f"Error displaying image {photo.name}"),
+                    text=sanitize(f"Error displaying image {getattr(photo_entry, 'name', display_name)}"),
                     new_x=XPos.LMARGIN,
                     new_y=YPos.NEXT,
                 )

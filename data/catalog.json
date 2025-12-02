@@ -3,20 +3,37 @@
     "tidel": {
       "label": "TiDel",
       "models": {
-        "cana_cabana_tidel_d3_xl_snf_w_o_storage_vault": {
-          "label": "Cana Cabana - Tidel D3 XL SNF w/o storage vault",
+        "canna_cabana_tidel_d3_snf_std_w_o_storage_vault": {
+          "label": "Canna Cabana - TiDel D3 SNF STD w/o Storage Vault",
           "category": "smart_safe",
           "dimensions": {
-            "weight": "65 kg / 143 lb",
+            "weight": "40 kg / 88 lb",
             "width": "259 mm / 10.2 in",
-            "depth": "714 mm / 28.1 in",
+            "depth": "482 mm / 19.0 in",
             "height": "705 mm / 27.8 in"
           },
           "media": {
-            "hero_image": "Tidel-D3-SNF-NoStorageVault_XL_Dimensions.jpg",
+            "hero_image": "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
             "gallery": [],
             "brochures": [
               "tidel-d3-family-brochure.pdf"
+            ]
+          }
+        },
+        "chipotle_mexican_grill_tidel_d4_snf_std": {
+          "label": "Chipotle Mexican Grill - TiDel D4 SNF STD",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 150 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.7 in"
+          },
+          "media": {
+            "hero_image": "Tidel-D4-D4e-BNF_NoStorageVault_STD.png",
+            "gallery": [],
+            "brochures": [
+              "tidel-d4.pdf"
             ]
           }
         }

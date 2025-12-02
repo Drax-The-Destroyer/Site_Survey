@@ -10,18 +10,40 @@ from data_loader import (
     load_questions,
     load_lang,
     get_data_version,
-    load_media_index, 
+    load_media_index,
 )
 from overrides import merge_overrides
-from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults, normalize_admin_fields  # newly added helper
+from form_renderer import (
+    apply_overrides as apply_field_overrides,
+    render_section,
+    seed_defaults,
+    normalize_admin_fields,
+)
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 from pdf_builder import build_survey_pdf
+from utils.images import process_survey_image
+from questions import get_questions_for
 
 # ---------------- App Config ----------------
 
 # st.set_page_config(page_title="Site Survey Form", layout="centered")
-st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Site Survey Form",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 st.title("📋 Site Survey Form")
+
+# --- Global session state initialization for survey answers + flags ---
+if "form_data" not in st.session_state:
+    st.session_state["form_data"] = {}
+if "_current_model_key" not in st.session_state:
+    st.session_state["_current_model_key"] = None
+if "_show_required_errors" not in st.session_state:
+    st.session_state["_show_required_errors"] = False
+# For normalized + optimized photos used across UI + PDF
+if "uploaded_photos" not in st.session_state:
+    st.session_state["uploaded_photos"] = []
 
 # Load data-driven resources
 version = get_data_version()
@@ -36,12 +58,14 @@ lang_map = load_lang("en", version)
 # --- Load Settings (branding + logo) ---
 SETTINGS_FP = os.path.join("data", "settings.json")
 
+
 def load_settings():
     try:
         with open(SETTINGS_FP, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except Exception:
         return {"branding": {}, "media": {}}
+
 
 def _hero_path(filename: str | None):
     """
@@ -83,26 +107,13 @@ def _hero_path(filename: str | None):
 
     # Not found — still return local path where it SHOULD be
     return local_paths[0]
-    
+
+
 settings = load_settings()
 
 # Extract the selected hero/logo file
 settings_logo = settings.get("media", {}).get("hero_image", "")
 settings_logo_path = _hero_path(settings_logo)
-# st.write("DEBUG: settings_logo =", settings_logo)
-# st.write("DEBUG: settings_logo_path =", settings_logo_path)
-
-# if isinstance(settings_logo_path, str):
-#     st.write("Exists on disk? ->", os.path.exists(settings_logo_path))
-# else:
-#     st.write("Exists on disk? ->", False)
-
-
-# Language toggle (scaffold for future FR)
-# lang_choice = st.selectbox("Language", ["English"], index=0)
-# TODO: When adding French or other locales:
-# - replace hardcoded "en" in load_lang("en", version)
-# - map lang_choice -> "en", "fr_qc", etc.
 
 # --- Equipment Selection (Make → Model; Category derived from model) ---
 st.subheader(f"1. {lang_map.get('section.site_info', 'Site Information')}")
@@ -116,7 +127,9 @@ def make_label(k: str) -> str:
 
 
 def model_label(mk: str, mdk: str) -> str:
-    return ((makes_map.get(mk) or {}).get("models", {}).get(mdk) or {}).get("label", mdk)
+    return ((makes_map.get(mk) or {}).get("models", {}).get(mdk) or {}).get(
+        "label", mdk
+    )
 
 
 def normalize_category(c: str) -> str:
@@ -138,26 +151,36 @@ def normalize_category(c: str) -> str:
 
 
 # Make selector
-make_key = st.selectbox(
-    "Make",
-    options=list(makes_map.keys()),
-    format_func=lambda k: make_label(k),
-    key="make_sel",
-) if makes_map else None
+make_key = (
+    st.selectbox(
+        "Make",
+        options=list(makes_map.keys()),
+        format_func=lambda k: make_label(k),
+        key="make_sel",
+    )
+    if makes_map
+    else None
+)
 
 # Model selector scoped to make
 models_map_for_make: Dict[str, Dict[str, Any]] = (
-    makes_map.get(make_key) or {}).get("models", {}) if make_key else {}
-model_key = st.selectbox(
-    "Model",
-    options=list(models_map_for_make.keys()),
-    format_func=lambda k: model_label(make_key, k),
-    key="model_sel",
-) if models_map_for_make else None
+    makes_map.get(make_key) or {}
+).get("models", {}) if make_key else {}
+model_key = (
+    st.selectbox(
+        "Model",
+        options=list(models_map_for_make.keys()),
+        format_func=lambda k: model_label(make_key, k),
+        key="model_sel",
+    )
+    if models_map_for_make
+    else None
+)
 
 # Pull selected model meta + derive category
 selected_model: Dict[str, Any] = (
-    models_map_for_make.get(model_key) or {}) if model_key else {}
+    models_map_for_make.get(model_key) or {} if model_key else {}
+)
 # e.g., "smart_safe", "recycler", etc.
 category = normalize_category(selected_model.get("category", ""))
 make = make_label(make_key) if make_key else None
@@ -182,10 +205,10 @@ model_height = model_dims.get("height", "")
 # New admin media placement:
 media = model_meta.get("media", {}) or {}
 hero_image = media.get("hero_image") or model_meta.get(
-    "hero_image")  # support legacy field if present
+    "hero_image"
+)  # support legacy field if present
 
 image_path = _hero_path(hero_image)
-
 
 # Equipment info display
 st.markdown(f"**Weight:** {model_weight}")
@@ -193,10 +216,9 @@ st.markdown(f"**Width:** {model_width}")
 st.markdown(f"**Depth:** {model_depth}")
 st.markdown(f"**Height:** {model_height}")
 
-# (already resolved above)
-
 # ✅ Responsive hero image without breaking st.image
-st.markdown("""
+st.markdown(
+    """
 <style>
 .hero-wrap {
   display: flex;
@@ -224,20 +246,19 @@ st.markdown("""
   }
 }
 </style>
-""", unsafe_allow_html=True)
-
+""",
+    unsafe_allow_html=True,
+)
 
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
     # hard cap the width; Streamlit will scale down, not up
     st.image(image_path, caption=f"{make} {model}", width=600)
-    st.markdown('</div>', unsafe_allow_html=True)
-
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # Prepare composed sections for current selection
 base_sections = qdef.get("base_sections", [])
-category_sections = (qdef.get("category_packs", {})
-                     or {}).get(category, []) or []
+category_sections = (qdef.get("category_packs", {}) or {}).get(category, []) or []
 sections_composed = base_sections + category_sections
 
 # Merge overrides and apply to sections
@@ -245,8 +266,8 @@ merged = merge_overrides(qdef, category=category, make=make, model=model)
 sections_used = apply_field_overrides(sections_composed, merged)
 
 # ---- Inject Admin-defined fields (Category -> "Delivery") into the composed sections ----
-# Derive cat_key in the same shape Admin uses as a top-level key in questions.json.
-# Admin saves under lowercase slug with underscores (e.g., "smart_safe").
+
+
 def _to_cat_key(label: str, model_meta: Dict[str, Any]) -> str:
     # Prefer the original model-provided category slug if present (e.g., "smart_safe")
     raw = (model_meta or {}).get("category")
@@ -255,12 +276,25 @@ def _to_cat_key(label: str, model_meta: Dict[str, Any]) -> str:
     # Fallback from normalized Category label ("Smart Safe" -> "smart_safe")
     return (label or "").strip().lower().replace("-", "_").replace(" ", "_")
 
+
 cat_key = _to_cat_key(category, model_meta)
-admin_fields_delivery = normalize_admin_fields(cat_key, "Delivery", qdef)
+
+# -------------------------
+# Inject Admin-defined fields per section
+# -------------------------
+
+# 1) Delivery: combine category + model-specific admin questions
+admin_questions_delivery = get_questions_for(
+    qdef,
+    category_key=cat_key,
+    section_name="Delivery",
+    make_key=make_key,
+    model_key=model_key,
+)
+admin_fields_delivery = normalize_admin_fields(cat_key, "Delivery", admin_questions_delivery)
 
 if admin_fields_delivery:
-    # Find a target section to receive these. For Smart Safe we prefer "smart_safe_additions",
-    # otherwise we fall back to the base delivery block.
+    # For Smart Safe we prefer "smart_safe_additions"; otherwise fall back to delivery_base.
     target = None
     for sec in sections_used:
         if sec.get("key") == "smart_safe_additions":
@@ -268,11 +302,33 @@ if admin_fields_delivery:
             break
     if target is None:
         for sec in sections_used:
-            if sec.get("key") == "delivery_base" or sec.get("title_key") == "section.delivery":
+            if (
+                sec.get("key") == "delivery_base"
+                or sec.get("title_key") == "section.delivery"
+            ):
                 target = sec
                 break
     if target is not None:
         target.setdefault("fields", []).extend(admin_fields_delivery)
+
+# 2) Installation: attach to the Installation Location section
+admin_questions_install = get_questions_for(
+    qdef,
+    category_key=cat_key,
+    section_name="Installation",
+    make_key=make_key,
+    model_key=model_key,
+)
+admin_fields_install = normalize_admin_fields(cat_key, "Installation", admin_questions_install)
+
+if admin_fields_install:
+    for sec in sections_used:
+        if (
+            sec.get("key") == "installation_location"
+            or sec.get("title_key") == "section.installation_location"
+        ):
+            sec.setdefault("fields", []).extend(admin_fields_install)
+            break
 
 # On model change, seed defaults
 curr_model_key = st.session_state.get("_current_model_key")
@@ -280,12 +336,41 @@ if curr_model_key != model_key:
     # reset error flag on model change
     st.session_state["_show_required_errors"] = False
     st.session_state["_current_model_key"] = model_key
-    # seed defaults from overrides
-    seed_defaults(st.session_state, merged.get(
-        "defaults", {}), overwrite_empty_only=True)
+    # seed defaults from overrides into canonical form_data
+    seed_defaults(
+        st.session_state["form_data"],
+        merged.get("defaults", {}),
+        overwrite_empty_only=True,
+    )
 
-# Working answers dict view on top of session_state
-answers: Dict[str, Any] = {}
+# Working answers dict view backed by session_state.form_data
+answers: Dict[str, Any] = st.session_state["form_data"]
+
+def _normalize_exts(exts: list[str] | None) -> list[str]:
+    """
+    Normalize a list of file extensions:
+
+    - Lowercase
+    - Ensure each starts with '.'
+    - De-duplicate
+    """
+    if not exts:
+        return []
+    seen = set()
+    norm: list[str] = []
+    for ext in exts:
+        if not ext:
+            continue
+        e = ext.lower().strip()
+        if not e:
+            continue
+        if not e.startswith("."):
+            e = "." + e
+        if e not in seen:
+            seen.add(e)
+            norm.append(e)
+    return norm
+
 
 # --- Upload Site Photos with rules ---
 st.subheader("2. Upload Site Photos")
@@ -295,49 +380,96 @@ rules = dict(model_meta.get("photo_rules", {}) or {})
 
 max_count: int = int(rules.get("max_count", 20))
 max_mb_each: float = float(rules.get("max_mb_each", 8))
-allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
+
+raw_allowed_exts = rules.get("allowed_ext")
+if not raw_allowed_exts:
+    # Default: jpg + jpeg + png
+    allowed_exts: List[str] = [".jpg", ".jpeg", ".png"]
+else:
+    # Normalize whatever was provided in config
+    if isinstance(raw_allowed_exts, str):
+        raw_allowed_exts = [raw_allowed_exts]
+    allowed_exts = _normalize_exts(raw_allowed_exts)
 
 # Convert to streamlit extension list without dot
-st_types = [ext[1:] if ext.startswith(".") else ext for ext in allowed_exts]
+st_types = [ext[1:] for ext in allowed_exts]
+
+allowed_label = ", ".join(ext.lstrip(".").upper() for ext in allowed_exts)
 
 photos_all = st.file_uploader(
     f"Upload up to {max_count} site photos",
     type=st_types,
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    help=f"Limit {max_mb_each:.0f}MB per file \u2022 {allowed_label}",
 )
 
 accepted_photos: List[Any] = []
+optimized_photos: List[Dict[str, Any]] = []
+
 if photos_all:
     too_many = len(photos_all) > max_count
     if too_many:
         st.error(
-            f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored.")
+            f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored."
+        )
     for photo in photos_all[:max_count]:
         # Validate extension
         name_lower = photo.name.lower()
         if not any(name_lower.endswith(ext) for ext in allowed_exts):
             st.error(
-                f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}")
+                f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}"
+            )
             continue
         # Validate size
         size_mb = (photo.size or 0) / (1024 * 1024)
         if size_mb > max_mb_each:
             st.error(
-                f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB).")
+                f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB)."
+            )
             continue
+
+        # Keep original upload reference for count/metadata
         accepted_photos.append(photo)
 
-answers["photos"] = accepted_photos
+        # One-time orientation + resize + JPEG compression for storage/PDF.
+        try:
+            jpeg_bytes = process_survey_image(photo)
+        except Exception:
+            # If processing fails, fall back to raw bytes where possible so we still render something
+            try:
+                jpeg_bytes = photo.getvalue()  # type: ignore[assignment]
+            except Exception:
+                try:
+                    jpeg_bytes = photo.read()  # type: ignore[assignment]
+                except Exception:
+                    jpeg_bytes = b""
+
+        optimized_photos.append({"name": photo.name, "data": jpeg_bytes})
+else:
+    # If user clears the uploader, reset state
+    accepted_photos = []
+    optimized_photos = []
+
+# Persist optimized photos (already oriented + compressed) in session state
+st.session_state["uploaded_photos"] = optimized_photos
+
+# Keep a simple reference in form_data answers (e.g., for names/metadata)
+answers["photos"] = [p.get("name") for p in optimized_photos]
+
 st.caption(f"{len(accepted_photos)} / {max_count} photos uploaded")
 
-# Preview thumbnails
-if accepted_photos:
+# Preview thumbnails using optimized images (JPEG bytes)
+if optimized_photos:
     cols = st.columns(5)
-    for i, photo in enumerate(accepted_photos):
+    for i, photo_entry in enumerate(optimized_photos):
+        img_bytes = photo_entry.get("data") or b""
+        if not img_bytes:
+            continue
         with cols[i % 5]:
             try:
-                st.image(photo, caption=photo.name, width=140)
+                st.image(img_bytes, caption=photo_entry.get("name", ""), width=140)
             except Exception:
+                # If preview fails for a specific image, just skip it
                 pass
 
 # --- Site Information ---
@@ -347,40 +479,53 @@ for _sec in sections_used:
         # Remove any "Store Hours" style field from this section
         def _skip_store_hours(f):
             name = (f.get("name") or "").strip().lower()
-            label = (lang_map.get(f.get("label_key") or "",
-                     f.get("label") or "") or "").strip().lower()
-            return name not in {"store_hours", "hours", "storehours"} and "store hours" not in label
+            label = (
+                lang_map.get(f.get("label_key") or "", f.get("label") or "") or ""
+            ).strip().lower()
+            return (
+                name not in {"store_hours", "hours", "storehours"}
+                and "store hours" not in label
+            )
 
         sec_no_hours = dict(_sec)
-        sec_no_hours["fields"] = [f for f in (
-            _sec.get("fields") or []) if _skip_store_hours(f)]
+        sec_no_hours["fields"] = [
+            f for f in (_sec.get("fields") or []) if _skip_store_hours(f)
+        ]
 
         render_section(
-            sec_no_hours, answers, lang=lang_map, category=category, make=make, model=model,
-            show_required_errors=bool(
-                st.session_state.get('_show_required_errors'))
+            sec_no_hours,
+            answers,
+            lang=lang_map,
+            category=category,
+            make=make,
+            model=model,
+            show_required_errors=bool(st.session_state.get("_show_required_errors")),
         )
         break
 
-
 # --- Contact Info ---
-st.subheader(
-    f"4. {lang_map.get('section.contact_info', 'Contact Information')}")
+st.subheader(f"4. {lang_map.get('section.contact_info', 'Contact Information')}")
 for _sec in sections_used:
     if _sec.get("key") == "contact_info":
-        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
-                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
+        render_section(
+            _sec,
+            answers,
+            lang=lang_map,
+            category=category,
+            make=make,
+            model=model,
+            show_required_errors=bool(st.session_state.get("_show_required_errors")),
+        )
         break
 
 # --- Hours of Operation ---
 st.subheader("5. Hours of Operation")
 
-days = ["Monday", "Tuesday", "Wednesday",
-        "Thursday", "Friday", "Saturday", "Sunday"]
+days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Default times and step for the time picker
-DEFAULT_OPEN_TIME = datetime.time(8, 0)   # 08:00
-DEFAULT_CLOSE_TIME = datetime.time(20, 0) # 20:00 (8 PM)
+DEFAULT_OPEN_TIME = datetime.time(8, 0)  # 08:00
+DEFAULT_CLOSE_TIME = datetime.time(20, 0)  # 20:00 (8 PM)
 TIME_STEP = datetime.timedelta(minutes=30)  # 30-minute increments
 
 # ---------- Quick presets (optional) ----------
@@ -470,37 +615,65 @@ for day in days:
 
 answers["hours"] = hours
 
-
-
 # --- Delivery Instructions ---
 st.subheader(f"6. {lang_map.get('section.delivery', 'Delivery Instructions')}")
 for _sec in sections_used:
     if _sec.get("key") in ("delivery_base", "smart_safe_additions"):
-        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
-                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
+        render_section(
+            _sec,
+            answers,
+            lang=lang_map,
+            category=category,
+            make=make,
+            model=model,
+            show_required_errors=bool(st.session_state.get("_show_required_errors")),
+        )
 
 # --- Additional Category Sections ---
 for _sec in sections_used:
-    if _sec.get("key") not in ("contact_info", "installation_location", "site_info", "delivery_base", "smart_safe_additions"):
-        sec_title = lang_map.get(
-            _sec.get("title_key", ""), _sec.get("title", ""))
+    if _sec.get("key") not in (
+        "contact_info",
+        "installation_location",
+        "site_info",
+        "delivery_base",
+        "smart_safe_additions",
+    ):
+        sec_title = lang_map.get(_sec.get("title_key", ""), _sec.get("title", ""))
         if sec_title:
             st.subheader(sec_title)
-        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
-                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
+        render_section(
+            _sec,
+            answers,
+            lang=lang_map,
+            category=category,
+            make=make,
+            model=model,
+            show_required_errors=bool(st.session_state.get("_show_required_errors")),
+        )
 
 # --- Installation Location ---
 st.subheader(
-    f"7. {lang_map.get('section.installation_location', 'Installation Location')}")
+    f"7. {lang_map.get('section.installation_location', 'Installation Location')}"
+)
 for _sec in sections_used:
     if _sec.get("key") == "installation_location":
-        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
-                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
+        render_section(
+            _sec,
+            answers,
+            lang=lang_map,
+            category=category,
+            make=make,
+            model=model,
+            show_required_errors=bool(st.session_state.get("_show_required_errors")),
+        )
         break
 
 # ---------------- Submit -> Validate -> Build PDF ----------------
 
-def _collect_missing_required(sections: List[Dict[str, Any]], state: Dict[str, Any]) -> List[str]:
+
+def _collect_missing_required(
+    sections: List[Dict[str, Any]], state: Dict[str, Any]
+) -> List[str]:
     missing: List[str] = []
     for sec in sections:
         for fld in sec.get("fields", []) or []:
@@ -509,8 +682,9 @@ def _collect_missing_required(sections: List[Dict[str, Any]], state: Dict[str, A
             if not visible_if_field(fld, state, category, make, model):
                 continue
             v = state.get(fld.get("name"))
-            is_empty = (v is None) or (isinstance(v, str) and v.strip() == "") or (
-                isinstance(v, list) and len(v) == 0)
+            is_empty = (v is None) or (
+                isinstance(v, str) and v.strip() == ""
+            ) or (isinstance(v, list) and len(v) == 0)
             if is_empty:
                 missing.append(fld.get("name"))
     return missing
@@ -543,7 +717,8 @@ if st.button("📄 Generate PDF"):
         model_height=model_height,
         image_path=image_path,
         settings_logo_path=settings_logo_path,
-        accepted_photos=accepted_photos,
+        # Use optimized photos (already oriented + resized + compressed)
+        accepted_photos=st.session_state.get("uploaded_photos", []),
         max_count=max_count,
         lang_map=lang_map,
         category=category,

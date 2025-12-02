@@ -91,7 +91,7 @@
           "label_key": "field.storage_floor_number",
           "type": "text"
         },
-       {
+        {
           "name": "storage_path_obstacles",
           "label_key": "field.storage_path_obstacles",
           "type": "multiselect",
@@ -130,6 +130,11 @@
           "type": "textarea"
         },
         {
+          "name": "stairs_count",
+          "label_key": "field.stairs_count",
+          "type": "number"
+        },
+        {
           "name": "delivery_weight_restrictions",
           "label_key": "field.delivery_weight_restrictions",
           "type": "radio",
@@ -138,7 +143,7 @@
             "No"
           ]
         },
-       {
+        {
           "name": "delivery_method",
           "label_key": "field.delivery_method",
           "type": "multiselect",
@@ -462,28 +467,7 @@
     }
   ],
   "category_packs": {
-    "Smart Safe": [
-      {
-        "key": "smart_safe_additions",
-        "title_key": "section.delivery",
-        "fields": [
-          {
-            "name": "stairs_count",
-            "label_key": "field.stairs_count",
-            "type": "number",
-            "visible_if": {
-              "any": [
-                {
-                  "field": "loading_dock",
-                  "op": "eq",
-                  "value": "No"
-                }
-              ]
-            }
-          }
-        ]
-      }
-    ],
+    "Smart Safe": [],
     "Recycler": [
       {
         "key": "power_network",
@@ -523,9 +507,6 @@
       "required": [
         "store_name"
       ],
-      "defaults": {
-        "loading_dock": "No"
-      },
       "hide_fields": [],
       "insert_after": []
     },
@@ -556,6 +537,60 @@
     "model:TiDel|D4": {
       "defaults": {
         "stairs_required": "Yes"
+      }
+    },
+    "by_model": {
+      "tidel:canna_cabana_tidel_d3_snf_std_w_o_storage_vault": {
+        "Installation": [
+          {
+            "key": "will_the_safe_will_be_in_a_camera_view_after_its_installed",
+            "label": "Will the safe will be in a camera view after its installed?",
+            "type": "radio",
+            "required": false,
+            "options": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "key": "will_the_safe_will_be_near_any_windows_or_external_doors",
+            "label": "Will the safe will be near any windows or external doors?",
+            "type": "radio",
+            "required": false,
+            "options": [
+              "Yes",
+              "No"
+            ]
+          }
+        ]
+      },
+      "tidel:chipotle_mexican_grill_tidel_d4_bnf_std": {
+        "Installation": [
+          {
+            "key": "which_install_location_will_be_used",
+            "label": "Which install location will be used?",
+            "type": "radio",
+            "required": false,
+            "options": [
+              "Up front under the cup dispenser for new stores.",
+              "Back office under a desk (for old stores that do not have room up front.) Will need to keep a minimum of 18\" space free under the desk after the safe is installed."
+            ]
+          }
+        ]
+      },
+      "tidel:chipotle_mexican_grill_tidel_d4_snf_std": {
+        "Installation": [
+          {
+            "key": "which_install_location_will_be_used",
+            "label": "Which install location will be used?",
+            "type": "radio",
+            "required": false,
+            "options": [
+              "Up front under the cup dispenser for new stores.",
+              "Back office under a desk (for old stores that do not have room up front.) Will need to keep a minimum of 18\" space free under the desk after the safe is installed."
+            ]
+          }
+        ]
       }
     }
   },

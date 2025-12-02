@@ -13,7 +13,7 @@
   "field.province": "Province",
 
   "field.loading_dock": "Is there a loading dock?",
-  "field.stairs_count": "How many stairs on the path?",
+  "field.stairs_count": "How many stairs on the path from delivery point to storage location?",
   "field.has_ethernet": "Is Ethernet available at the install location?",
   "field.ethernet_distance_m": "Approx. cable distance (m)",
 

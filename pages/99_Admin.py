@@ -61,19 +61,12 @@ from data_loader import (
 )
 
 
-# Simple password (can be overridden by secrets or env later if you want)
+# Simple password
 def _get_admin_password(default="CashTech"):
-    # Prefer env var (never throws)
-    pwd = os.getenv("ADMIN_PASSWORD")
-    if pwd:
-        return pwd
-    # Try Streamlit secrets, but guard to avoid StreamlitSecretNotFoundError
-    try:
-        return st.secrets["ADMIN_PASSWORD"]
-    except Exception:
-        return default
+    return os.getenv("ADMIN_PASSWORD", default)
 
 PASSWORD = _get_admin_password()
+
 
 def require_admin_password():
     if st.session_state.get("admin_ok"):
@@ -181,6 +174,14 @@ def _mtime(path: str) -> float:
 def slugify(text: str) -> str:
     s = re.sub(r"[^a-zA-Z0-9]+", "_", text.strip()).strip("_")
     return s.lower()
+
+
+def model_q_id(make_key: str, model_key: str) -> str:
+    """
+    Stable ID for model-specific question overrides.
+    Stored under questions['overrides']['by_model'][model_q_id].
+    """
+    return f"{make_key}:{model_key}"
 
 
 def ensure_unique(seq: List[str]) -> Tuple[bool, Optional[str]]:
@@ -738,127 +739,403 @@ with TAB[1]:
 # -----------------------------
 with TAB[2]:
     st.subheader("Question Sets Builder")
-    st.write("Define fields by Category → Section. Types: text, textarea, number, select, multiselect, radio, time, checkbox, file. Use visible_if to show conditionally.")
+    st.write(
+        "Define fields by Category → Section or by Model → Section. "
+        "Types: text, textarea, number, select, multiselect, radio, time, checkbox, file. "
+        "Use visible_if to show conditionally."
+    )
 
-    cat_keys = list(categories.keys())
-    if not cat_keys:
-        st.info("Create at least one category first.")
-    else:
-        c1, c2 = st.columns(2)
-        with c1:
-            cat_sel = st.selectbox(
-                "Category", options=cat_keys, format_func=lambda k: categories[k]["label"])
-        with c2:
-            sec_options = categories[cat_sel].get("sections", [])
-            sec_sel = st.selectbox("Section", options=sec_options)
+    scope = st.radio(
+        "Scope",
+        ["By category", "By model"],
+        horizontal=True,
+        key="q_scope",
+    )
 
-        q_list: List[Dict[str, Any]] = questions.setdefault(
-            cat_sel, {}).setdefault(sec_sel, [])
-
-        # New question form
-        with st.form("add_q"):
-            q_label = st.text_input("Question label")
-            q_key = st.text_input("Key", value=slugify(q_label))
-            q_type = st.selectbox("Type", options=[
-                                  "text", "textarea", "number", "select", "multiselect", "radio", "time", "checkbox", "file"])
-            q_required = st.checkbox("Required", value=False)
-            colx, coly = st.columns(2)
-            with colx:
-                q_options = st.text_input(
-                    "Options (comma-separated, for select/radio/multiselect)")
-            with coly:
-                q_visible_if = st.text_input(
-                    "visible_if (JSON; e.g., {\"field\":\"dock\",\"equals\":\"Yes\"})")
-            q_submit = st.form_submit_button("➕ Add Field", type="primary")
-        if q_submit:
-            if not q_key:
-                st.warning("Key is required.")
-            elif any(q.get("key") == q_key for q in q_list):
-                st.error("Key already exists in this section.")
-            else:
-                new_q = {
-                    "key": q_key,
-                    "label": q_label or q_key,
-                    "type": q_type,
-                    "required": q_required,
-                }
-                if q_options.strip():
-                    new_q["options"] = [o.strip()
-                                        for o in q_options.split(",") if o.strip()]
-                if q_visible_if.strip():
-                    try:
-                        new_q["visible_if"] = json.loads(q_visible_if)
-                    except Exception as e:
-                        st.error(f"Invalid JSON for visible_if: {e}")
-                q_list.append(new_q)
-                _write_json(QUESTIONS_FP, questions)
-                bump_data_version()
-                st.success("Field added.")
-
-        # Editor
-        if q_list:
-            q_rows = []
-            for it in q_list:
-                q_rows.append({
-                    "key": it.get("key", ""),
-                    "Label": it.get("label", ""),
-                    "Type": it.get("type", "text"),
-                    "Required": bool(it.get("required", False)),
-                    "Options (comma)": ", ".join(it.get("options", [])) if isinstance(it.get("options"), list) else "",
-                    "visible_if (JSON)": json.dumps(it.get("visible_if")) if isinstance(it.get("visible_if"), dict) else "",
-                })
-            df = pd.DataFrame(q_rows)
-            edited = st.data_editor(
-                df,
-                **editor_width_kwargs(width='stretch'),
-                hide_index=True,
-                column_config={
-                    "Type": st.column_config.SelectboxColumn(options=["text", "textarea", "number", "select", "multiselect", "radio", "time", "checkbox", "file"]),
-                    "Required": st.column_config.CheckboxColumn(),
-                },
-                num_rows="dynamic",
-            )
+    # -------------------------
+    # Scope: By category (existing behaviour)
+    # -------------------------
+    if scope == "By category":
+        cat_keys = list(categories.keys())
+        if not cat_keys:
+            st.info("Create at least one category first.")
+        else:
             c1, c2 = st.columns(2)
             with c1:
-                if wide_button("💾 Save Questions", type="primary"):
-                    new_list = []
-                    keys_seen = set()
-                    for _, r in edited.iterrows():
-                        k = str(r["key"]).strip() or slugify(
-                            r.get("Label", "field"))
-                        if k in keys_seen:
-                            st.error(f"Duplicate key in section: {k}")
-                            st.stop()
-                        keys_seen.add(k)
-                        item = {
-                            "key": k,
-                            "label": str(r.get("Label", "")),
-                            "type": str(r.get("Type", "text")),
-                            "required": bool(r.get("Required", False)),
-                        }
-                        opts = str(r.get("Options (comma)", "")).strip()
-                        if opts:
-                            item["options"] = [o.strip()
-                                               for o in opts.split(",") if o.strip()]
-                        vis = str(r.get("visible_if (JSON)", "")).strip()
-                        if vis:
-                            try:
-                                item["visible_if"] = json.loads(vis)
-                            except Exception as e:
-                                st.error(
-                                    f"Invalid visible_if JSON on {k}: {e}")
-                                st.stop()
-                        new_list.append(item)
-                    questions.setdefault(cat_sel, {})[sec_sel] = new_list
+                cat_sel = st.selectbox(
+                    "Category",
+                    options=cat_keys,
+                    format_func=lambda k: categories[k]["label"],
+                )
+            with c2:
+                sec_options = categories[cat_sel].get("sections", [])
+                sec_sel = st.selectbox("Section", options=sec_options)
+
+            q_list: List[Dict[str, Any]] = questions.setdefault(cat_sel, {}).setdefault(sec_sel, [])
+
+            # New question form
+            with st.form("add_q_cat"):
+                q_label = st.text_input("Question label", key="c_q_label")
+                q_key = st.text_input("Key", value=slugify(q_label), key="c_q_key")
+                q_type = st.selectbox(
+                    "Type",
+                    options=[
+                        "text",
+                        "textarea",
+                        "number",
+                        "select",
+                        "multiselect",
+                        "radio",
+                        "time",
+                        "checkbox",
+                        "file",
+                    ],
+                    key="c_q_type",
+                )
+                q_required = st.checkbox("Required", value=False, key="c_q_req")
+                colx, coly = st.columns(2)
+                with colx:
+                    q_options = st.text_input(
+                        "Options (comma-separated, for select/radio/multiselect)",
+                        key="c_q_opts",
+                    )
+                with coly:
+                    q_visible_if = st.text_input(
+                        'visible_if (JSON; e.g., {"field":"dock","equals":"Yes"})',
+                        key="c_q_vis",
+                    )
+                q_submit = st.form_submit_button("➕ Add Field", type="primary")
+            if q_submit:
+                if not q_key:
+                    st.warning("Key is required.")
+                elif any(q.get("key") == q_key for q in q_list):
+                    st.error("Key already exists in this section.")
+                else:
+                    new_q = {
+                        "key": q_key,
+                        "label": q_label or q_key,
+                        "type": q_type,
+                        "required": q_required,
+                    }
+                    if q_options.strip():
+                        new_q["options"] = [
+                            o.strip() for o in q_options.split(",") if o.strip()
+                        ]
+                    if q_visible_if.strip():
+                        try:
+                            new_q["visible_if"] = json.loads(q_visible_if)
+                        except Exception as e:
+                            st.error(f"Invalid JSON for visible_if: {e}")
+                    q_list.append(new_q)
                     _write_json(QUESTIONS_FP, questions)
                     bump_data_version()
-                    st.success("Saved.")
-            with c2:
-                if wide_button("🧪 Validate Section"):
-                    st.success(
-                        "Basic validation OK (unique keys & JSON parse).")
+                    st.success("Field added.")
+
+            # Editor
+            if q_list:
+                q_rows = []
+                for it in q_list:
+                    q_rows.append(
+                        {
+                            "key": it.get("key", ""),
+                            "Label": it.get("label", ""),
+                            "Type": it.get("type", "text"),
+                            "Required": bool(it.get("required", False)),
+                            "Options (comma)": ", ".join(it.get("options", []))
+                            if isinstance(it.get("options"), list)
+                            else "",
+                            "visible_if (JSON)": json.dumps(it.get("visible_if"))
+                            if isinstance(it.get("visible_if"), dict)
+                            else "",
+                        }
+                    )
+                df = pd.DataFrame(q_rows)
+                edited = st.data_editor(
+                    df,
+                    **editor_width_kwargs(width="stretch"),
+                    hide_index=True,
+                    column_config={
+                        "Type": st.column_config.SelectboxColumn(
+                            options=[
+                                "text",
+                                "textarea",
+                                "number",
+                                "select",
+                                "multiselect",
+                                "radio",
+                                "time",
+                                "checkbox",
+                                "file",
+                            ]
+                        ),
+                        "Required": st.column_config.CheckboxColumn(),
+                    },
+                    num_rows="dynamic",
+                )
+                c1, c2 = st.columns(2)
+                with c1:
+                    if wide_button("💾 Save Questions", type="primary"):
+                        new_list = []
+                        keys_seen = set()
+                        for _, r in edited.iterrows():
+                            k = str(r["key"]).strip() or slugify(
+                                r.get("Label", "field")
+                            )
+                            if k in keys_seen:
+                                st.error(f"Duplicate key in section: {k}")
+                                st.stop()
+                            keys_seen.add(k)
+                            item = {
+                                "key": k,
+                                "label": str(r.get("Label", "")),
+                                "type": str(r.get("Type", "text")),
+                                "required": bool(r.get("Required", False)),
+                            }
+                            opts = str(r.get("Options (comma)", "")).strip()
+                            if opts:
+                                item["options"] = [
+                                    o.strip() for o in opts.split(",") if o.strip()
+                                ]
+                            vis = str(r.get("visible_if (JSON)", "")).strip()
+                            if vis:
+                                try:
+                                    item["visible_if"] = json.loads(vis)
+                                except Exception as e:
+                                    st.error(
+                                        f"Invalid visible_if JSON on {k}: {e}"
+                                    )
+                                    st.stop()
+                            new_list.append(item)
+                        questions.setdefault(cat_sel, {})[sec_sel] = new_list
+                        _write_json(QUESTIONS_FP, questions)
+                        bump_data_version()
+                        st.success("Saved.")
+                with c2:
+                    if wide_button("🧪 Validate Section"):
+                        st.success("Basic validation OK (unique keys & JSON parse).")
+            else:
+                st.info("No fields yet for this section.")
+
+    # -------------------------
+    # Scope: By model (new)
+    # -------------------------
+    else:
+        makes_map = catalog.get("makes", {})
+        if not makes_map:
+            st.info("Add a make/model in the Catalog tab first.")
         else:
-            st.info("No fields yet for this section.")
+            make_keys = list(makes_map.keys())
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                sel_make = st.selectbox(
+                    "Make",
+                    options=make_keys,
+                    format_func=lambda k: makes_map[k].get("label", k),
+                    key="q_make_sel",
+                )
+
+            models_map = makes_map.get(sel_make, {}).get("models", {})
+            if not models_map:
+                st.warning("Selected make has no models yet.")
+                st.stop()
+
+            model_keys = list(models_map.keys())
+            with c2:
+                sel_model = st.selectbox(
+                    "Model",
+                    options=model_keys,
+                    format_func=lambda k: models_map[k].get("label", k),
+                    key="q_model_sel",
+                )
+
+            mdl_obj = models_map.get(sel_model, {})
+            mdl_cat = mdl_obj.get("category") or None
+            if mdl_cat and mdl_cat in categories:
+                sec_options = categories[mdl_cat].get("sections", [])
+            else:
+                # fallback if category is missing
+                first_cat = next(iter(categories.keys()))
+                sec_options = categories[first_cat].get("sections", [])
+                mdl_cat = first_cat
+
+            with c3:
+                sec_sel = st.selectbox("Section", options=sec_options, key="q_model_sec")
+
+            # Load or init model override list
+            overrides_root = questions.setdefault("overrides", {}).setdefault(
+                "by_model", {}
+            )
+            model_id = model_q_id(sel_make, sel_model)
+            model_sec_map = overrides_root.setdefault(model_id, {})
+            q_list: List[Dict[str, Any]] = model_sec_map.setdefault(sec_sel, [])
+
+            st.caption(
+                f"Model override for **{makes_map[sel_make].get('label', sel_make)} → "
+                f"{mdl_obj.get('label', sel_model)}**, section **{sec_sel}** "
+                f"(category: {mdl_cat})"
+            )
+
+            # New model-specific question form
+            with st.form("add_q_model"):
+                q_label = st.text_input("Question label", key="m_q_label")
+                q_key = st.text_input(
+                    "Key", value=slugify(q_label), key="m_q_key"
+                )
+                q_type = st.selectbox(
+                    "Type",
+                    options=[
+                        "text",
+                        "textarea",
+                        "number",
+                        "select",
+                        "multiselect",
+                        "radio",
+                        "time",
+                        "checkbox",
+                        "file",
+                    ],
+                    key="m_q_type",
+                )
+                q_required = st.checkbox(
+                    "Required", value=False, key="m_q_req"
+                )
+                colx, coly = st.columns(2)
+                with colx:
+                    q_options = st.text_input(
+                        "Options (comma-separated, for select/radio/multiselect)",
+                        key="m_q_opts",
+                    )
+                with coly:
+                    q_visible_if = st.text_input(
+                        'visible_if (JSON; e.g., {"field":"dock","equals":"Yes"})',
+                        key="m_q_vis",
+                    )
+                q_submit = st.form_submit_button(
+                    "➕ Add Model Field", type="primary"
+                )
+
+            if q_submit:
+                if not q_key:
+                    st.warning("Key is required.")
+                elif any(q.get("key") == q_key for q in q_list):
+                    st.error("Key already exists in this model/section.")
+                else:
+                    new_q = {
+                        "key": q_key,
+                        "label": q_label or q_key,
+                        "type": q_type,
+                        "required": q_required,
+                    }
+                    if q_options.strip():
+                        new_q["options"] = [
+                            o.strip() for o in q_options.split(",") if o.strip()
+                        ]
+                    if q_visible_if.strip():
+                        try:
+                            new_q["visible_if"] = json.loads(q_visible_if)
+                        except Exception as e:
+                            st.error(f"Invalid JSON for visible_if: {e}")
+                    q_list.append(new_q)
+                    overrides_root[model_id] = model_sec_map
+                    questions.setdefault("overrides", {})["by_model"] = overrides_root
+                    _write_json(QUESTIONS_FP, questions)
+                    bump_data_version()
+                    st.success("Model field added.")
+
+            # Editor for model overrides
+            if q_list:
+                q_rows = []
+                for it in q_list:
+                    q_rows.append(
+                        {
+                            "key": it.get("key", ""),
+                            "Label": it.get("label", ""),
+                            "Type": it.get("type", "text"),
+                            "Required": bool(it.get("required", False)),
+                            "Options (comma)": ", ".join(it.get("options", []))
+                            if isinstance(it.get("options"), list)
+                            else "",
+                            "visible_if (JSON)": json.dumps(it.get("visible_if"))
+                            if isinstance(it.get("visible_if"), dict)
+                            else "",
+                        }
+                    )
+                df = pd.DataFrame(q_rows)
+                edited = st.data_editor(
+                    df,
+                    **editor_width_kwargs(width="stretch"),
+                    hide_index=True,
+                    column_config={
+                        "Type": st.column_config.SelectboxColumn(
+                            options=[
+                                "text",
+                                "textarea",
+                                "number",
+                                "select",
+                                "multiselect",
+                                "radio",
+                                "time",
+                                "checkbox",
+                                "file",
+                            ]
+                        ),
+                        "Required": st.column_config.CheckboxColumn(),
+                    },
+                    num_rows="dynamic",
+                )
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    if wide_button("💾 Save Model Questions", type="primary"):
+                        new_list = []
+                        keys_seen = set()
+                        for _, r in edited.iterrows():
+                            k = str(r["key"]).strip() or slugify(
+                                r.get("Label", "field")
+                            )
+                            if k in keys_seen:
+                                st.error(
+                                    f"Duplicate key in model section: {k}"
+                                )
+                                st.stop()
+                            keys_seen.add(k)
+                            item = {
+                                "key": k,
+                                "label": str(r.get("Label", "")),
+                                "type": str(r.get("Type", "text")),
+                                "required": bool(r.get("Required", False)),
+                            }
+                            opts = str(r.get("Options (comma)", "")).strip()
+                            if opts:
+                                item["options"] = [
+                                    o.strip() for o in opts.split(",") if o.strip()
+                                ]
+                            vis = str(r.get("visible_if (JSON)", "")).strip()
+                            if vis:
+                                try:
+                                    item["visible_if"] = json.loads(vis)
+                                except Exception as e:
+                                    st.error(
+                                        f"Invalid visible_if JSON on {k}: {e}"
+                                    )
+                                    st.stop()
+                            new_list.append(item)
+
+                        model_sec_map[sec_sel] = new_list
+                        overrides_root[model_id] = model_sec_map
+                        questions.setdefault("overrides", {})["by_model"] = overrides_root
+                        _write_json(QUESTIONS_FP, questions)
+                        bump_data_version()
+                        st.success("Model questions saved.")
+                with c2:
+                    if wide_button("🧪 Validate Model Section"):
+                        st.success(
+                            "Basic validation OK (unique keys & JSON parse)."
+                        )
+            else:
+                st.info(
+                    "No model-specific fields yet for this section."
+                )
 
 # -----------------------------
 # Media Library Tab
@@ -1421,12 +1698,3 @@ with TAB[6]:
         file_name="site_survey_data_bundle.zip",
         mime="application/zip",
     )
-
-
-
-
-
-
-
-
-
