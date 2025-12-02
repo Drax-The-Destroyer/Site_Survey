@@ -11,30 +11,16 @@
             "width": "259 mm / 10.2 in",
             "depth": "482 mm / 19.0 in",
             "height": "705 mm / 27.8 in"
-          },
-          "media": {
-            "hero_image": "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
-            "gallery": [],
-            "brochures": [
-              "tidel-d3-family-brochure.pdf"
-            ]
           }
         },
         "chipotle_mexican_grill_tidel_d4_snf_std": {
           "label": "Chipotle Mexican Grill - TiDel D4 SNF STD",
           "category": "smart_safe",
           "dimensions": {
-            "weight": "68 kg / 150 lb",
+            "weight": "43 kg / 96 lb",
             "width": "311 mm / 12.2 in",
             "depth": "584 mm / 23.0 in",
-            "height": "781 mm / 30.7 in"
-          },
-          "media": {
-            "hero_image": "Tidel-D4-D4e-BNF_NoStorageVault_STD.png",
-            "gallery": [],
-            "brochures": [
-              "tidel-d4.pdf"
-            ]
+            "height": "457 mm / 18 in"
           }
         }
       }
