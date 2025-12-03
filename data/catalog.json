@@ -11,6 +11,11 @@
             "width": "259 mm / 10.2 in",
             "depth": "482 mm / 19.0 in",
             "height": "705 mm / 27.8 in"
+          },
+          "media": {
+            "hero_image": "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
+            "gallery": [],
+            "brochures": []
           }
         },
         "chipotle_mexican_grill_tidel_d4_snf_std": {
@@ -21,6 +26,11 @@
             "width": "311 mm / 12.2 in",
             "depth": "584 mm / 23.0 in",
             "height": "457 mm / 18 in"
+          },
+          "media": {
+            "hero_image": "tidel_d4_snf_w_riser_std.jpg",
+            "gallery": [],
+            "brochures": []
           }
         }
       }
