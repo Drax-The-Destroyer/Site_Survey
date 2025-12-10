@@ -429,50 +429,97 @@ hero_image = media.get("hero_image") or model_meta.get(
 image_path = _hero_path(hero_image)
 
 
-# Equipment info display
-st.markdown(f"**Weight:** {model_weight}")
-st.markdown(f"**Width:** {model_width}")
-st.markdown(f"**Depth:** {model_depth}")
-st.markdown(f"**Height:** {model_height}")
+# Equipment info display - mobile-friendly layout
+st.markdown("### Equipment Specifications")
 
-# (already resolved above)
+col1, col2 = st.columns([1, 1])
 
-# ✅ Responsive hero image without breaking st.image
+with col1:
+    st.markdown(f"**Weight:** {model_weight}")
+    st.markdown(f"**Width:** {model_width}")
+
+with col2:
+    st.markdown(f"**Depth:** {model_depth}")
+    st.markdown(f"**Height:** {model_height}")
+
+# Mobile-responsive styling for dimensions
+st.markdown("""
+<style>
+/* Stack columns on mobile for better readability */
+@media (max-width: 480px) {
+  .stColumn {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  
+  /* Make text larger and more readable on mobile */
+  .stMarkdown p {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Responsive hero image - prevents horizontal scrolling on mobile
 st.markdown("""
 <style>
 .hero-wrap {
   display: flex;
   justify-content: center;
   margin: 1rem 0;
+  width: 100%;
+  overflow: hidden;  /* Prevent horizontal scroll */
 }
+
 .hero-wrap img {
   display: block;
   width: 100% !important;
   height: auto !important;
-  max-width: 600px !important;  /* hard cap on desktop */
+  object-fit: contain;
 }
 
-/* Phone */
+/* Mobile Portrait: phones up to 480px */
 @media (max-width: 480px) {
+  .hero-wrap {
+    margin: 0.5rem 0;
+  }
   .hero-wrap img {
-    max-width: 95vw !important;
+    max-width: 100% !important;  /* Fill screen width */
+    max-height: 60vh !important;  /* Limit height to 60% of viewport */
   }
 }
 
-/* Tablet */
-@media (min-width: 481px) and (max-width: 1024px) {
+/* Mobile Landscape: phones 481px - 767px */
+@media (min-width: 481px) and (max-width: 767px) {
   .hero-wrap img {
-    max-width: 480px !important;
+    max-width: 90vw !important;
+    max-height: 50vh !important;
+  }
+}
+
+/* Tablet: 768px - 1024px */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hero-wrap img {
+    max-width: 500px !important;
+    max-height: 600px !important;
+  }
+}
+
+/* Desktop: 1025px and up */
+@media (min-width: 1025px) {
+  .hero-wrap img {
+    max-width: 600px !important;
+    max-height: 700px !important;
   }
 }
 </style>
 """, unsafe_allow_html=True)
 
-
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
-    # hard cap the width; Streamlit will scale down, not up
-    st.image(image_path, caption=f"{make} {model}", width=600)
+    # Use use_column_width=True for responsive behavior
+    st.image(image_path, caption=f"{make} {model}", use_column_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -561,58 +608,129 @@ def try_autosave():
             # Subtle success indicator (don't distract user)
             st.caption("💾 Draft saved")
 
-# --- Upload Site Photos with rules ---
+# --- Upload Site Photos with CLIENT-SIDE compression ---
 st.subheader("2. Upload Site Photos")
 
 # Determine photo rules: use model.photo_rules, fallback to conservative defaults
 rules = dict(model_meta.get("photo_rules", {}) or {})
 
-max_count: int = int(rules.get("max_count", 20))
-max_mb_each: float = float(rules.get("max_mb_each", 8))
-allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
+max_count: int = int(rules.get("max_count", Config.MAX_PHOTOS_DEFAULT))
+max_mb_each: float = float(rules.get("max_mb_each", Config.MAX_PHOTO_SIZE_MB))
 
-# Convert to streamlit extension list without dot
-st_types = [ext[1:] if ext.startswith(".") else ext for ext in allowed_exts]
+# Info box for technicians about mobile-friendly upload
+st.info("""
+📱 **Mobile-Friendly Upload (Optimized for Cellular Networks):**
+- Photos are compressed automatically in your browser before upload
+- Works reliably on 4G/5G and slower 3G connections
+- Each photo is reduced to ~500KB or less
+- Upload happens sequentially for best results on mobile data
+""")
 
-photos_all = st.file_uploader(
-    f"Upload up to {max_count} site photos",
-    type=st_types,
-    accept_multiple_files=True
-)
+# Import client-side compression handler
+from utils.photo_handler import create_photo_uploader_with_compression
 
-accepted_photos: List[Any] = []
-if photos_all:
-    too_many = len(photos_all) > max_count
-    if too_many:
-        st.error(
-            f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored.")
-    for photo in photos_all[:max_count]:
-        # Validate extension
-        name_lower = photo.name.lower()
-        if not any(name_lower.endswith(ext) for ext in allowed_exts):
+# Initialize session state for photos if not present
+if "uploaded_photos" not in st.session_state:
+    st.session_state["uploaded_photos"] = []
+
+# Use new compressed uploader if feature is enabled
+if Config.ENABLE_CLIENT_COMPRESSION:
+    compressed_photos = create_photo_uploader_with_compression(
+        max_photos=max_count,
+        max_size_mb=max_mb_each,
+        target_max_dimension=Config.MAX_IMAGE_DIMENSION,
+        jpeg_quality=Config.PHOTO_QUALITY_JPEG
+    )
+    
+    # Process compressed photos (already compressed client-side)
+    if compressed_photos:
+        st.session_state["uploaded_photos"] = compressed_photos
+        st.success(f"✓ {len(compressed_photos)} photo(s) ready to add to survey")
+        
+        # Update answers
+        answers["photos"] = compressed_photos
+        
+        # Show count
+        st.caption(f"📷 {len(compressed_photos)} of {max_count} photos attached")
+        
+        # Preview thumbnails - mobile-friendly grid
+        st.markdown("### 📸 Photo Preview")
+        
+        # Mobile-responsive columns
+        st.markdown("""
+        <style>
+        @media (max-width: 480px) {
+            .stColumns { 
+                flex-direction: column !important;
+            }
+            .stColumn {
+                width: 100% !important;
+            }
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Use 2 columns on mobile, 5 on desktop
+        num_cols = 5
+        cols = st.columns(num_cols)
+        
+        for i, photo_entry in enumerate(compressed_photos):
+            img_bytes = photo_entry.get("data") or b""
+            if not img_bytes:
+                continue
+            with cols[i % num_cols]:
+                try:
+                    st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_column_width=True)
+                except Exception:
+                    pass
+    else:
+        # No photos yet, show placeholder
+        st.caption(f"📷 0 of {max_count} photos attached")
+        answers["photos"] = []
+else:
+    # Fallback to standard file uploader if compression is disabled
+    allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
+    st_types = [ext[1:] if ext.startswith(".") else ext for ext in allowed_exts]
+    
+    photos_all = st.file_uploader(
+        f"Upload up to {max_count} site photos",
+        type=st_types,
+        accept_multiple_files=True
+    )
+    
+    accepted_photos: List[Any] = []
+    if photos_all:
+        too_many = len(photos_all) > max_count
+        if too_many:
             st.error(
-                f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}")
-            continue
-        # Validate size
-        size_mb = (photo.size or 0) / (1024 * 1024)
-        if size_mb > max_mb_each:
-            st.error(
-                f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB).")
-            continue
-        accepted_photos.append(photo)
-
-answers["photos"] = accepted_photos
-st.caption(f"{len(accepted_photos)} / {max_count} photos uploaded")
-
-# Preview thumbnails
-if accepted_photos:
-    cols = st.columns(5)
-    for i, photo in enumerate(accepted_photos):
-        with cols[i % 5]:
-            try:
-                st.image(photo, caption=photo.name, width=140)
-            except Exception:
-                pass
+                f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored.")
+        for photo in photos_all[:max_count]:
+            # Validate extension
+            name_lower = photo.name.lower()
+            if not any(name_lower.endswith(ext) for ext in allowed_exts):
+                st.error(
+                    f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}")
+                continue
+            # Validate size
+            size_mb = (photo.size or 0) / (1024 * 1024)
+            if size_mb > max_mb_each:
+                st.error(
+                    f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB).")
+                continue
+            accepted_photos.append(photo)
+    
+    answers["photos"] = accepted_photos
+    st.caption(f"{len(accepted_photos)} / {max_count} photos uploaded")
+    
+    # Preview thumbnails
+    if accepted_photos:
+        cols = st.columns(5)
+        for i, photo in enumerate(accepted_photos):
+            with cols[i % 5]:
+                try:
+                    st.image(photo, caption=photo.name, width=140)
+                except Exception:
+                    pass
 
 # --- Site Information ---
 st.subheader(f"3. {lang_map.get('section.site_info', 'Site Information')}")

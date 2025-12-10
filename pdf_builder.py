@@ -928,28 +928,53 @@ def build_survey_pdf(
                 pdf.add_page()
                 section_header(pdf, "Site Survey Photo")
                 
-                # Open image and apply EXIF orientation correction
-                img = Image.open(photo)
-                img = ImageOps.exif_transpose(img)  # Auto-rotate based on EXIF data
-                img = img.convert("RGB")
-                
-                temp_path = f"temp_{photo.name}.jpg"
-                img.save(temp_path, format="JPEG")
-                img.close()
+                # Handle both new compressed format (dict) and legacy format (UploadedFile)
+                if isinstance(photo, dict):
+                    # New format: {"name": str, "data": bytes, "size": int}
+                    photo_name = photo.get("name", "photo.jpg")
+                    photo_bytes = photo.get("data")
+                    
+                    if not photo_bytes:
+                        raise ValueError("Photo data is empty")
+                    
+                    # Open image from bytes
+                    img = Image.open(BytesIO(photo_bytes))
+                    img = ImageOps.exif_transpose(img)  # Auto-rotate based on EXIF data
+                    img = img.convert("RGB")
+                    
+                    temp_path = f"temp_{photo_name}.jpg"
+                    img.save(temp_path, format="JPEG")
+                    img.close()
+                    
+                    logger.info(f"Photo processed successfully (compressed): {photo_name}, size: {len(photo_bytes) / 1024:.1f} KB")
+                else:
+                    # Legacy format: Streamlit UploadedFile object
+                    photo_name = photo.name
+                    
+                    # Open image and apply EXIF orientation correction
+                    img = Image.open(photo)
+                    img = ImageOps.exif_transpose(img)  # Auto-rotate based on EXIF data
+                    img = img.convert("RGB")
+                    
+                    temp_path = f"temp_{photo_name}.jpg"
+                    img.save(temp_path, format="JPEG")
+                    img.close()
+                    
+                    logger.info(f"Photo processed successfully (legacy): {photo_name}")
 
                 y_top = pdf.get_y()
                 max_w = pdf.w - pdf.l_margin - pdf.r_margin
                 max_h = pdf.h - y_top - pdf.b_margin - 5
                 center_image(pdf, temp_path, max_w=max_w, max_h=max_h, y_top=y_top)
-                logger.info(f"Photo processed successfully: {photo.name}")
             except Exception as e:
-                logger.error(f"Failed to process photo: {photo.name}", extra={"error": str(e)}, exc_info=True)
+                photo_name = photo.get("name", "photo") if isinstance(photo, dict) else getattr(photo, "name", "photo")
+                logger.error(f"Failed to process photo: {photo_name}", extra={"error": str(e)}, exc_info=True)
                 pdf.set_font("Helvetica", "B", 11)
                 set_text_color(pdf, (200, 0, 0))
                 pdf.cell(
                     0,
                     H_ROW,
-                    text=sanitize(f"Error displaying image {photo.name}"),
+                    text=sanitize(f"Error displaying image {photo_name}"),
                     new_x=XPos.LMARGIN,
                     new_y=YPos.NEXT,
                 )

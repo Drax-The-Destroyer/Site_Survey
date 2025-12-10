@@ -19,6 +19,15 @@ class Config:
     PHOTO_QUALITY_JPEG: int = 75
     MAX_IMAGE_DIMENSION: int = 1600
     
+    # Photo Upload Settings (Mobile)
+    PHOTO_UPLOAD_TIMEOUT_SECONDS: int = 60  # Per photo
+    ENABLE_CLIENT_COMPRESSION: bool = True  # Feature flag
+    
+    # Hero Image Display
+    HERO_IMAGE_MAX_WIDTH_MOBILE: str = "100vw"  # Fill mobile screen
+    HERO_IMAGE_MAX_HEIGHT_MOBILE: str = "60vh"  # Limit vertical space
+    HERO_IMAGE_MAX_WIDTH_DESKTOP: str = "600px"
+    
     # Form settings
     TIME_PICKER_STEP_MINUTES: int = 30
     AUTOSAVE_INTERVAL_SECONDS: int = 30
