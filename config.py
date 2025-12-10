@@ -50,3 +50,9 @@ class Config:
     DATA_DIR: str = "data"
     MEDIA_DIR: str = "data/media"
     LOGS_DIR: str = "logs"
+    DATABASE_PATH: str = "data/surveys.db"
+    
+    # ==================== Database & Autosave ====================
+    
+    AUTOSAVE_INTERVAL_SECONDS: int = 30
+    MAX_DRAFT_AGE_DAYS: int = 30  # For future cleanup job

@@ -130,22 +130,20 @@ def apply_overrides(sections: List[Dict[str, Any]], merged_overrides: Dict[str, 
     return out_sections
 
 
-def seed_defaults(state: Dict[str, Any], defaults: Dict[str, Any], overwrite_empty_only: bool = True) -> None:
+def seed_defaults(answers: Dict[str, Any], defaults: Dict[str, Any], overwrite_empty_only: bool = True) -> None:
     """
-    Seed default values into Streamlit session state or an answers dict.
+    Seed default values. answers IS st.session_state["form_data"].
     If overwrite_empty_only is True, only set when missing or empty/None/""
     """
     if not isinstance(defaults, dict):
         return
     for k, v in defaults.items():
         if not overwrite_empty_only:
-            st.session_state[k] = v
-            state[k] = v
+            answers[k] = v
             continue
-        curr = st.session_state.get(k, state.get(k))
+        curr = answers.get(k)
         if curr is None or curr == "":
-            st.session_state[k] = v
-            state[k] = v
+            answers[k] = v
 
 
 def _translated_label(field: Dict[str, Any], lang: Optional[Dict[str, str]]) -> str:
@@ -169,6 +167,37 @@ def _coerce_number_input_defaults(field: Dict[str, Any]) -> Dict[str, Any]:
         # Prefer integer step when reasonable
         kwargs["step"] = 1 if isinstance(field.get("default"), int) else 1
     return kwargs
+
+
+def _get_default_value(field: Dict[str, Any]) -> Any:
+    """Get appropriate default value for field type."""
+    if "default" in field:
+        return field["default"]
+    
+    ftype = field.get("type", "text")
+    defaults = {
+        "text": "",
+        "textarea": "",
+        "number": 0,
+        "multiselect": [],
+        "checkbox": False,
+        "radio": None,  # Will use placeholder/no default
+        "time": None,
+        "select": None,
+        "file": None,
+    }
+    return defaults.get(ftype, "")
+
+
+def _init_field_state(field: Dict[str, Any], answers: Dict[str, Any]) -> None:
+    """Initialize field value if missing. answers IS session_state["form_data"]."""
+    name = field.get("name")
+    if not name:
+        return
+    
+    # Only initialize if truly missing
+    if name not in answers:
+        answers[name] = _get_default_value(field)
 
 
 def render_section(
@@ -211,87 +240,79 @@ def render_section(
         else:
             label_to_show = label_text
 
-        # Render per type
+        # Render per type - Initialize, create widget, sync back
         if ftype == "text":
-            val = st.text_input(label_to_show, value=answers.get(
-                name, ""), help=help_text, key=key)
-            answers[name] = val
+            _init_field_state(field, answers)
+            st.text_input(label_to_show, value=answers[name], key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "textarea":
-            val = st.text_area(label_to_show, value=answers.get(
-                name, ""), help=help_text, key=key)
-            answers[name] = val
+            _init_field_state(field, answers)
+            st.text_area(label_to_show, value=answers[name], key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "radio":
+            _init_field_state(field, answers)
             options = field.get("options", []) or []
-            # Resolve default/index
+            # Resolve default/index from answers
             default_index: Optional[int] = None
-            if name in answers and answers[name] in options:
+            if answers[name] is not None and answers[name] in options:
                 default_index = options.index(answers[name])
-            elif "default" in field and field["default"] in options:
-                default_index = options.index(field["default"])
-            # else: leave default_index as None
-
+            
             if options:
-                if default_index is not None:
-                    val = st.radio(label_to_show, options=options, index=default_index,
-                                horizontal=False, help=help_text, key=key)
-                else:
-                    val = st.radio(label_to_show, options=options, index=None,
-                                horizontal=False, help=help_text, key=key)
+                st.radio(label_to_show, options=options, index=default_index,
+                        horizontal=False, key=key, help=help_text)
             else:
-                val = st.radio(label_to_show, options=[],
-                            help=help_text, key=key)
-            answers[name] = val
+                st.radio(label_to_show, options=[], key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "time":
+            _init_field_state(field, answers)
             # Render time without seconds by using minute step granularity
-            val = st.time_input(label_to_show, value=answers.get(
-                name), step=60, help=help_text, key=key)
-            answers[name] = val
+            st.time_input(label_to_show, value=answers[name], step=60, key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "number":
+            _init_field_state(field, answers)
             kwargs = _coerce_number_input_defaults(field)
-            default_val = answers.get(name, field.get("default", 0))
+            default_val = answers[name]
             # Ensure default is numeric
             if not isinstance(default_val, (int, float)):
                 try:
                     default_val = int(default_val)
                 except Exception:
                     default_val = 0
-            val = st.number_input(
-                label_to_show, value=default_val, help=help_text, key=key, **kwargs)
-            answers[name] = val
+            st.number_input(label_to_show, value=default_val, key=key, help=help_text, **kwargs)
+            answers[name] = st.session_state[key]
 
         elif ftype == "select":
+            _init_field_state(field, answers)
             options = field.get("options", []) or []
-            current = answers.get(name)
+            current = answers[name]
             index = 0
             if current in options:
                 index = options.index(current)
-            elif "default" in field and field["default"] in options:
-                index = options.index(field["default"])
-            val = st.selectbox(label_to_show, options=options,
-                               index=index if options else 0, help=help_text, key=key)
-            answers[name] = val
+            st.selectbox(label_to_show, options=options, index=index if options else 0, 
+                        key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "multiselect":
+            _init_field_state(field, answers)
             options = field.get("options", []) or []
-            default_vals = answers.get(name, field.get("default", []))
+            default_vals = answers[name]
             if not isinstance(default_vals, list):
-                default_vals = [
-                    default_vals] if default_vals is not None else []
-            val = st.multiselect(label_to_show, options=options,
-                                 default=default_vals, help=help_text, key=key)
-            answers[name] = val
+                default_vals = [default_vals] if default_vals is not None else []
+            st.multiselect(label_to_show, options=options, default=default_vals, 
+                          key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "checkbox":
-            default_val = answers.get(name, field.get("default", False))
-            val = st.checkbox(label_to_show, value=bool(
-                default_val), help=help_text, key=key)
-            answers[name] = val
+            _init_field_state(field, answers)
+            st.checkbox(label_to_show, value=bool(answers[name]), key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         elif ftype == "file":
+            _init_field_state(field, answers)
             allow_multi = bool(field.get("multiple", False))
             exts = field.get("allowed_ext")
             if isinstance(exts, list):
@@ -300,15 +321,15 @@ def render_section(
                     ".") else e for e in exts]
             else:
                 types = None
-            val = st.file_uploader(
-                label_to_show, type=types, accept_multiple_files=allow_multi, help=help_text, key=key)
-            answers[name] = val
+            st.file_uploader(label_to_show, type=types, accept_multiple_files=allow_multi,
+                           key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         else:
             # Fallback to text
-            val = st.text_input(label_to_show, value=answers.get(
-                name, ""), help=help_text, key=key)
-            answers[name] = val
+            _init_field_state(field, answers)
+            st.text_input(label_to_show, value=answers[name], key=key, help=help_text)
+            answers[name] = st.session_state[key]
 
         # Inline required error
         if show_required_errors and field.get("required"):

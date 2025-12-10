@@ -3,7 +3,7 @@ import os
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
@@ -927,7 +927,12 @@ def build_survey_pdf(
             try:
                 pdf.add_page()
                 section_header(pdf, "Site Survey Photo")
-                img = Image.open(photo).convert("RGB")
+                
+                # Open image and apply EXIF orientation correction
+                img = Image.open(photo)
+                img = ImageOps.exif_transpose(img)  # Auto-rotate based on EXIF data
+                img = img.convert("RGB")
+                
                 temp_path = f"temp_{photo.name}.jpg"
                 img.save(temp_path, format="JPEG")
                 img.close()

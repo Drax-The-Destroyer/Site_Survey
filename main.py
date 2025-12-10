@@ -1,11 +1,14 @@
 import os
 import datetime
 import json
+import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
 from utils.logger import setup_logger
+from utils.database import SurveyDatabase
 from config import Config
 from data_loader import (
     load_catalog,
@@ -22,10 +25,186 @@ from pdf_builder import build_survey_pdf
 # Setup logger
 logger = setup_logger(__name__)
 
+# Initialize database
+db = SurveyDatabase(Config.DATABASE_PATH)
+
+# ==================== Helper: Deserialize Draft Data ====================
+def deserialize_draft_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert serialized data types back to their original Python types.
+    Handles: datetime.time strings -> datetime.time objects
+    """
+    import re
+    from datetime import time as datetime_time
+    
+    deserialized = {}
+    for key, value in data.items():
+        # Convert time strings back to datetime.time objects
+        # Streamlit serializes times as "HH:MM:SS" or "HH:MM"
+        if isinstance(value, str) and re.match(r'^\d{1,2}:\d{2}(:\d{2})?$', value):
+            try:
+                parts = value.split(':')
+                hour = int(parts[0])
+                minute = int(parts[1])
+                second = int(parts[2]) if len(parts) > 2 else 0
+                deserialized[key] = datetime_time(hour, minute, second)
+                continue
+            except:
+                pass
+        
+        deserialized[key] = value
+    
+    return deserialized
+
+
+def _validate_session_state() -> None:
+    """
+    Debug helper to ensure no orphaned widget keys.
+    Checks that form data is properly centralized in form_data dict.
+    """
+    if "form_data" not in st.session_state:
+        return
+    
+    form_data_keys = set(st.session_state["form_data"].keys())
+    
+    # Known non-form keys that should exist in session_state
+    known_system_keys = {
+        "form_data", "survey_id", "last_autosave", "show_drafts", 
+        "_show_required_errors", "_current_model_key",
+        "make_sel", "model_sel",
+        "same_weekdays", "weekend_closed", "apply_hours_presets",
+        "weekday_open_preset", "weekday_close_preset"
+    }
+    
+    # Check for orphaned widget keys (form fields that aren't in form_data)
+    orphaned = []
+    for key in st.session_state.keys():
+        # Skip internal Streamlit keys
+        if key.startswith("_") and key not in {"_show_required_errors", "_current_model_key"}:
+            continue
+        # Skip known system keys
+        if key in known_system_keys:
+            continue
+        # Skip button/form submission keys
+        if key.startswith(("FormSubmitter:", "load_", "del_", "download_")):
+            continue
+        # Skip hours of operation keys (managed separately)
+        if key.startswith(("open_", "close_", "closed_")):
+            continue
+        # If it's not in form_data, it might be orphaned
+        if key not in form_data_keys:
+            orphaned.append(key)
+    
+    if orphaned:
+        logger.warning(f"Orphaned session keys found: {orphaned}")
+        # In development, you might want to see this:
+        # st.warning(f"Debug: Found {len(orphaned)} orphaned keys: {orphaned[:5]}")
+
 # ---------------- App Config ----------------
 
 # st.set_page_config(page_title="Site Survey Form", layout="centered")
 st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="expanded")
+
+# ==================== Sidebar: Draft Management & Export ====================
+with st.sidebar:
+    st.title("📋 Survey Management")
+    
+    # Initialize show_drafts flag if not present
+    if "show_drafts" not in st.session_state:
+        st.session_state["show_drafts"] = False
+    
+    if st.button("📂 View My Drafts"):
+        st.session_state["show_drafts"] = not st.session_state["show_drafts"]
+    
+    if st.session_state.get("show_drafts"):
+        drafts = db.list_drafts(limit=20)
+        
+        if drafts:
+            st.markdown("### Recent Drafts")
+            for survey_id, store, make_draft, model_draft, updated_at, tech in drafts:
+                # Format timestamp
+                try:
+                    dt = datetime.datetime.fromisoformat(updated_at)
+                    time_ago = dt.strftime("%b %d, %I:%M %p")
+                except:
+                    time_ago = updated_at[:16] if updated_at else "Unknown"
+                
+                # Display draft info
+                draft_label = f"{store or 'Unnamed Store'} - {make_draft} {model_draft}"
+                st.markdown(f"**{draft_label}**")
+                st.caption(f"Last saved: {time_ago}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📥 Load", key=f"load_{survey_id}"):
+                        loaded_data = db.load_draft(survey_id)
+                        if loaded_data:
+                            # Deserialize data types (time strings -> time objects)
+                            loaded_data = deserialize_draft_data(loaded_data)
+                            
+                            # Initialize form_data if not present
+                            if "form_data" not in st.session_state:
+                                st.session_state["form_data"] = {}
+                            
+                            # Restore session state, routing form fields to form_data
+                            skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
+                                         "apply_hours_presets", "_show_required_errors", "_current_model_key",
+                                         "weekday_open_preset", "weekday_close_preset", "form_data"}
+                            skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
+                            
+                            # First, restore form_data if it exists in loaded data
+                            if "form_data" in loaded_data:
+                                st.session_state["form_data"] = loaded_data["form_data"]
+                            
+                            # Then restore other session state (hours, system keys, etc.)
+                            for key, value in loaded_data.items():
+                                if key == "form_data":
+                                    continue  # Already handled
+                                if key in skip_exact or any(key.startswith(prefix) for prefix in skip_prefixes):
+                                    continue
+                                try:
+                                    st.session_state[key] = value
+                                except:
+                                    pass
+                            
+                            st.session_state["survey_id"] = survey_id
+                            logger.info(f"Draft loaded from sidebar", extra={"survey_id": survey_id})
+                            st.success("Draft loaded!")
+                            st.rerun()
+                with col2:
+                    if st.button("🗑️ Delete", key=f"del_{survey_id}"):
+                        if db.delete_draft(survey_id):
+                            st.success("Draft deleted")
+                            st.rerun()
+                
+                st.divider()
+        else:
+            st.info("No drafts found")
+    
+    # Export current draft as JSON
+    st.markdown("---")
+    st.markdown("### Export Current Survey")
+    
+    if st.session_state.get("survey_id"):
+        if st.button("💾 Export Draft (JSON)"):
+            export_data = dict(st.session_state)
+            export_json = json.dumps(export_data, indent=2, default=str)
+            st.download_button(
+                "📥 Download JSON",
+                data=export_json,
+                file_name=f"survey_draft_{st.session_state['survey_id']}.json",
+                mime="application/json",
+                key="download_json_btn"
+            )
+        
+        st.caption("💡 **Tip:** Download your draft before closing the browser to avoid data loss on Streamlit Cloud.")
+    else:
+        st.caption("Start a survey to enable export")
+    
+    # NOTE about Streamlit Cloud ephemeral storage
+    st.markdown("---")
+    st.caption("⚠️ **Note:** On Streamlit Cloud, the database is temporary and resets on app restart. Export important drafts before closing.")
+
 st.title("📋 Site Survey Form")
 
 # Load data-driven resources
@@ -177,6 +356,64 @@ if not (make and model):
 else:
     # model_key and model_meta already set above
     logger.info(f"Equipment selected - Make: {make}, Model: {model}, Category: {category}")
+    
+    # ==================== Survey Session Management ====================
+    # Check if survey_id exists, otherwise look for recent draft or create new
+    if "survey_id" not in st.session_state:
+        # Check for recent draft matching this make/model
+        recent_draft_id = db.find_recent_draft(make, model, limit_hours=24)
+        
+        if recent_draft_id:
+            # Offer to resume draft
+            st.info(f"📂 Found a recent draft for {make} {model}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📥 Resume Draft"):
+                    loaded_data = db.load_draft(recent_draft_id)
+                    if loaded_data:
+                        # Deserialize data types (time strings -> time objects)
+                        loaded_data = deserialize_draft_data(loaded_data)
+                        
+                        # Initialize form_data if not present
+                        if "form_data" not in st.session_state:
+                            st.session_state["form_data"] = {}
+                        
+                        # Restore session state, routing form fields to form_data
+                        skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
+                                     "apply_hours_presets", "_show_required_errors", "_current_model_key",
+                                     "weekday_open_preset", "weekday_close_preset", "form_data"}
+                        skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
+                        
+                        # First, restore form_data if it exists in loaded data
+                        if "form_data" in loaded_data:
+                            st.session_state["form_data"] = loaded_data["form_data"]
+                        
+                        # Then restore other session state (hours, system keys, etc.)
+                        for key, value in loaded_data.items():
+                            if key == "form_data":
+                                continue  # Already handled
+                            if key in skip_exact or any(key.startswith(prefix) for prefix in skip_prefixes):
+                                continue
+                            try:
+                                st.session_state[key] = value
+                            except:
+                                pass
+                        
+                        st.session_state["survey_id"] = recent_draft_id
+                        logger.info(f"Resumed draft", extra={"survey_id": recent_draft_id})
+                        st.success("Draft loaded! Scroll down to continue.")
+                        st.rerun()
+            with col2:
+                if st.button("🆕 Start Fresh"):
+                    st.session_state["survey_id"] = str(uuid.uuid4())
+                    st.session_state["last_autosave"] = 0
+                    logger.info(f"Started new survey", extra={"survey_id": st.session_state["survey_id"]})
+                    st.rerun()
+        else:
+            # No recent draft, create new survey ID
+            st.session_state["survey_id"] = str(uuid.uuid4())
+            st.session_state["last_autosave"] = 0
+            logger.info(f"Created new survey", extra={"survey_id": st.session_state["survey_id"]})
 
 # Dimensions and hero image
 model_dims = model_meta.get("dimensions", {}) if model_meta else {}
@@ -279,18 +516,50 @@ if admin_fields_delivery:
     if target is not None:
         target.setdefault("fields", []).extend(admin_fields_delivery)
 
+# Initialize form_data as single source of truth
+if "form_data" not in st.session_state:
+    st.session_state["form_data"] = {}
+
 # On model change, seed defaults
 curr_model_key = st.session_state.get("_current_model_key")
 if curr_model_key != model_key:
     # reset error flag on model change
     st.session_state["_show_required_errors"] = False
     st.session_state["_current_model_key"] = model_key
-    # seed defaults from overrides
-    seed_defaults(st.session_state, merged.get(
+    # seed defaults from overrides directly into form_data
+    seed_defaults(st.session_state["form_data"], merged.get(
         "defaults", {}), overwrite_empty_only=True)
 
-# Working answers dict view on top of session_state
-answers: Dict[str, Any] = {}
+# Single source of truth: answers IS st.session_state["form_data"]
+answers: Dict[str, Any] = st.session_state["form_data"]
+
+# ==================== Autosave Helper Function ====================
+def try_autosave():
+    """
+    Attempt to autosave current form state if enough time has passed.
+    Runs silently - shows subtle indicator only on success.
+    """
+    if not st.session_state.get("survey_id"):
+        return
+    
+    if not (make and model):
+        return
+    
+    current_time = time.time()
+    last_save_time = st.session_state.get("last_autosave", 0)
+    
+    if current_time - last_save_time > Config.AUTOSAVE_INTERVAL_SECONDS:
+        # Prepare snapshot of current state
+        save_data = dict(st.session_state)
+        save_data["make"] = make
+        save_data["model"] = model
+        save_data["category"] = category
+        
+        # Save to database
+        if db.save_draft(st.session_state["survey_id"], save_data):
+            st.session_state["last_autosave"] = current_time
+            # Subtle success indicator (don't distract user)
+            st.caption("💾 Draft saved")
 
 # --- Upload Site Photos with rules ---
 st.subheader("2. Upload Site Photos")
@@ -367,6 +636,8 @@ for _sec in sections_used:
         )
         break
 
+# Autosave after Site Information
+try_autosave()
 
 # --- Contact Info ---
 st.subheader(
@@ -376,6 +647,9 @@ for _sec in sections_used:
         render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
                        show_required_errors=bool(st.session_state.get('_show_required_errors')))
         break
+
+# Autosave after Contact Info
+try_autosave()
 
 # --- Hours of Operation ---
 st.subheader("5. Hours of Operation")
@@ -475,7 +749,8 @@ for day in days:
 
 answers["hours"] = hours
 
-
+# Autosave after Hours of Operation
+try_autosave()
 
 # --- Delivery Instructions ---
 st.subheader(f"6. {lang_map.get('section.delivery', 'Delivery Instructions')}")
@@ -483,6 +758,9 @@ for _sec in sections_used:
     if _sec.get("key") in ("delivery_base", "smart_safe_additions"):
         render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
                        show_required_errors=bool(st.session_state.get('_show_required_errors')))
+
+# Autosave after Delivery Instructions
+try_autosave()
 
 # --- Additional Category Sections ---
 for _sec in sections_used:
@@ -502,6 +780,9 @@ for _sec in sections_used:
         render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
                        show_required_errors=bool(st.session_state.get('_show_required_errors')))
         break
+
+# Autosave after Installation Location
+try_autosave()
 
 # ---------------- Submit -> Validate -> Build PDF ----------------
 
@@ -558,6 +839,14 @@ if st.button("📄 Generate PDF"):
         category=category,
         )
         logger.info("PDF generated successfully", extra={"pdf_filename": file_name, "size_bytes": len(pdf_bytes)})
+        
+        # Mark survey as complete in database
+        if st.session_state.get("survey_id"):
+            db.mark_complete(st.session_state["survey_id"], file_name)
+            logger.info("Survey marked complete", extra={
+                "survey_id": st.session_state["survey_id"],
+                "pdf_filename": file_name
+            })
         
         st.success(
             "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
