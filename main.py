@@ -149,7 +149,7 @@ with st.sidebar:
                             # Restore session state, routing form fields to form_data
                             skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
                                          "apply_hours_presets", "_show_required_errors", "_current_model_key",
-                                         "weekday_open_preset", "weekday_close_preset", "form_data"}
+                                         "weekday_open_preset", "weekday_close_preset", "form_data", "photo_uploader_key"}
                             skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
                             
                             # First, restore form_data if it exists in loaded data
@@ -381,7 +381,7 @@ else:
                         # Restore session state, routing form fields to form_data
                         skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
                                      "apply_hours_presets", "_show_required_errors", "_current_model_key",
-                                     "weekday_open_preset", "weekday_close_preset", "form_data"}
+                                     "weekday_open_preset", "weekday_close_preset", "form_data", "photo_uploader_key"}
                         skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
                         
                         # First, restore form_data if it exists in loaded data
@@ -518,8 +518,8 @@ st.markdown("""
 
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
-    # Use use_column_width=True for responsive behavior
-    st.image(image_path, caption=f"{make} {model}", use_column_width=True)
+    # Use use_container_width=True for responsive behavior
+    st.image(image_path, caption=f"{make} {model}", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -608,7 +608,7 @@ def try_autosave():
             # Subtle success indicator (don't distract user)
             st.caption("💾 Draft saved")
 
-# --- Upload Site Photos with CLIENT-SIDE compression ---
+# --- Upload Site Photos with Server-Side compression ---
 st.subheader("2. Upload Site Photos")
 
 # Determine photo rules: use model.photo_rules, fallback to conservative defaults
@@ -617,16 +617,7 @@ rules = dict(model_meta.get("photo_rules", {}) or {})
 max_count: int = int(rules.get("max_count", Config.MAX_PHOTOS_DEFAULT))
 max_mb_each: float = float(rules.get("max_mb_each", Config.MAX_PHOTO_SIZE_MB))
 
-# Info box for technicians about mobile-friendly upload
-st.info("""
-📱 **Mobile-Friendly Upload (Optimized for Cellular Networks):**
-- Photos are compressed automatically in your browser before upload
-- Works reliably on 4G/5G and slower 3G connections
-- Each photo is reduced to ~500KB or less
-- Upload happens sequentially for best results on mobile data
-""")
-
-# Import client-side compression handler
+# Import server-side compression handler
 from utils.photo_handler import create_photo_uploader_with_compression
 
 # Initialize session state for photos if not present
@@ -642,13 +633,16 @@ if Config.ENABLE_CLIENT_COMPRESSION:
         jpeg_quality=Config.PHOTO_QUALITY_JPEG
     )
     
-    # Process compressed photos (already compressed client-side)
+    # Process compressed photos (server-side compression)
     if compressed_photos:
         st.session_state["uploaded_photos"] = compressed_photos
         st.success(f"✓ {len(compressed_photos)} photo(s) ready to add to survey")
         
         # Update answers
         answers["photos"] = compressed_photos
+        
+        # Set accepted_photos for PDF builder (expects this variable name)
+        accepted_photos = compressed_photos
         
         # Show count
         st.caption(f"📷 {len(compressed_photos)} of {max_count} photos attached")
@@ -680,13 +674,14 @@ if Config.ENABLE_CLIENT_COMPRESSION:
                 continue
             with cols[i % num_cols]:
                 try:
-                    st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_column_width=True)
+                    st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_container_width=True)
                 except Exception:
                     pass
     else:
         # No photos yet, show placeholder
         st.caption(f"📷 0 of {max_count} photos attached")
         answers["photos"] = []
+        accepted_photos = []
 else:
     # Fallback to standard file uploader if compression is disabled
     allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
