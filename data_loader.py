@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Set, Iterable
 
 import streamlit as st
 
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 # Centralized field type allowlist
 ALLOWED_FIELD_TYPES: Set[str] = {
     "text",
@@ -44,8 +48,10 @@ def _read_json_safe(path: str, default=None):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
+        logger.warning(f"File not found: {path}")
         return default if default is not None else {}
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to read JSON file: {path}", extra={"error": str(e)}, exc_info=True)
         return default if default is not None else {}
 
 
@@ -73,12 +79,16 @@ def _read_json(rel_path: str) -> Any:
     """Read a JSON file relative to the app root with a helpful error on failure."""
     abs_path = os.path.join(os.getcwd(), rel_path)
     if not os.path.exists(abs_path):
+        logger.error(f"Missing required file: {rel_path}")
         st.error(f"Missing file: {rel_path}. Please add it to continue.")
         raise FileNotFoundError(abs_path)
     try:
         with open(abs_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            logger.info(f"Successfully loaded: {rel_path}")
+            return data
     except Exception as e:
+        logger.error(f"Failed to parse JSON file: {rel_path}", extra={"error": str(e)}, exc_info=True)
         st.error(f"Failed to parse JSON file: {rel_path}\nError: {e}")
         raise
 
@@ -88,16 +98,19 @@ def _validate_unique_field_names(section: Dict[str, Any], where: str) -> None:
     for fld in section.get("fields", []):
         nm = fld.get("name")
         if not nm:
+            logger.error(f"Field without name in section '{section.get('key')}' ({where})")
             st.error(
                 f"Section '{section.get('key') or section.get('title')}' in {where} has a field without a 'name'.")
             raise ValueError("Field without name")
         if nm in names:
+            logger.error(f"Duplicate field name '{nm}' in section '{section.get('key')}' ({where})")
             st.error(
                 f"Duplicate field name '{nm}' in section '{section.get('key') or section.get('title')}' ({where}).")
             raise ValueError("Duplicate field name")
         names.add(nm)
         ftype = fld.get("type", "text")
         if ftype not in ALLOWED_FIELD_TYPES:
+            logger.error(f"Unsupported field type '{ftype}' for field '{nm}'")
             st.error(
                 f"Field '{nm}' in section '{section.get('key')}'...d type '{ftype}'. Allowed types: {sorted(ALLOWED_FIELD_TYPES)}")
             raise ValueError("Unsupported field type")

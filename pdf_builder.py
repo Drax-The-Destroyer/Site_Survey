@@ -7,7 +7,11 @@ from PIL import Image
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from utils.logger import setup_logger
+from config import Config
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
+
+logger = setup_logger(__name__)
 
 
 def sanitize(text: Any) -> str:
@@ -121,19 +125,19 @@ def nbsp_units(s: str) -> str:
 
 # ---------------- PDF Layout Constants ----------------
 
-GRAY = (230, 230, 230)
-DARK = (60, 60, 60)
-LIGHT = (120, 120, 120)
-LINE_GRAY = (200, 200, 200)
+GRAY = Config.PDF_GRAY
+DARK = Config.PDF_DARK
+LIGHT = Config.PDF_LIGHT
+LINE_GRAY = Config.PDF_LINE_GRAY
 
-H_SECTION = 8
-H_ROW = 6.5
-H_TABLE = 7
-SPACE_AFTER_SEC = 1.2
-SPACE_AFTER_BLOCK = 1.2
+H_SECTION = Config.PDF_SECTION_HEIGHT
+H_ROW = Config.PDF_ROW_HEIGHT
+H_TABLE = Config.PDF_TABLE_HEIGHT
+SPACE_AFTER_SEC = Config.PDF_SPACE_AFTER_SECTION
+SPACE_AFTER_BLOCK = Config.PDF_SPACE_AFTER_BLOCK
 # Horizontal rule defaults (used by draw_hr and spacing checks)
-HR_THICK = 0.4
-HR_PAD = 2
+HR_THICK = Config.PDF_HR_THICKNESS
+HR_PAD = Config.PDF_HR_PAD
 
 
 def set_text_color(pdf: FPDF, rgb: Tuple[int, int, int]) -> None:
@@ -226,7 +230,7 @@ def page_title(pdf: FPDF, title: str, date_str: str, logo_path: Optional[str] = 
             y_pos = pdf.get_y() + 2
             pdf.image(logo_path, x=x_pos, y=y_pos, w=logo_w)
         except Exception as e:  # pragma: no cover - defensive logging
-            print("Logo draw error:", e)
+            logger.error(f"Logo draw error: {str(e)}", extra={"logo_path": logo_path}, exc_info=True)
 
     # Title text aligned left (not centered)
     pdf.set_font("Helvetica", "B", 17)
@@ -364,9 +368,14 @@ def center_image(
     y_top: Optional[float] = None,
 ) -> Tuple[float, float]:
     if not os.path.exists(path):
+        logger.warning(f"Image not found: {path}")
         return (0, 0)
-    with Image.open(path) as img:
-        w_img, h_img = img.size
+    try:
+        with Image.open(path) as img:
+            w_img, h_img = img.size
+    except Exception as e:
+        logger.error(f"Failed to open image: {path}", extra={"error": str(e)}, exc_info=True)
+        return (0, 0)
 
     page_w, page_h = pdf.w, pdf.h
     usable_w = page_w - pdf.l_margin - pdf.r_margin
@@ -912,6 +921,7 @@ def build_survey_pdf(
 
     # --- Photos: one per page ---
     if accepted_photos:
+        logger.info(f"Processing {len(accepted_photos)} photos for PDF")
         for photo in accepted_photos[: max_count]:
             temp_path: Optional[str] = None
             try:
@@ -926,7 +936,9 @@ def build_survey_pdf(
                 max_w = pdf.w - pdf.l_margin - pdf.r_margin
                 max_h = pdf.h - y_top - pdf.b_margin - 5
                 center_image(pdf, temp_path, max_w=max_w, max_h=max_h, y_top=y_top)
-            except Exception:
+                logger.info(f"Photo processed successfully: {photo.name}")
+            except Exception as e:
+                logger.error(f"Failed to process photo: {photo.name}", extra={"error": str(e)}, exc_info=True)
                 pdf.set_font("Helvetica", "B", 11)
                 set_text_color(pdf, (200, 0, 0))
                 pdf.cell(

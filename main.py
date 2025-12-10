@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
+from utils.logger import setup_logger
+from config import Config
 from data_loader import (
     load_catalog,
     load_questions,
@@ -16,6 +18,9 @@ from overrides import merge_overrides
 from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults, normalize_admin_fields  # newly added helper
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 from pdf_builder import build_survey_pdf
+
+# Setup logger
+logger = setup_logger(__name__)
 
 # ---------------- App Config ----------------
 
@@ -171,7 +176,7 @@ if not (make and model):
     model_meta = {}
 else:
     # model_key and model_meta already set above
-    pass
+    logger.info(f"Equipment selected - Make: {make}, Model: {model}, Category: {category}")
 
 # Dimensions and hero image
 model_dims = model_meta.get("dimensions", {}) if model_meta else {}
@@ -381,7 +386,7 @@ days = ["Monday", "Tuesday", "Wednesday",
 # Default times and step for the time picker
 DEFAULT_OPEN_TIME = datetime.time(8, 0)   # 08:00
 DEFAULT_CLOSE_TIME = datetime.time(20, 0) # 20:00 (8 PM)
-TIME_STEP = datetime.timedelta(minutes=30)  # 30-minute increments
+TIME_STEP = datetime.timedelta(minutes=Config.TIME_PICKER_STEP_MINUTES)
 
 # ---------- Quick presets (optional) ----------
 st.markdown("**Quick Setup (optional)**")
@@ -517,6 +522,8 @@ def _collect_missing_required(sections: List[Dict[str, Any]], state: Dict[str, A
 
 
 if st.button("📄 Generate PDF"):
+    logger.info("PDF generation initiated", extra={"make": make, "model": model})
+    
     # Merge collected inputs into session_state-based answers for validation
     validate_state = dict(st.session_state)
     validate_state.update(answers)
@@ -525,12 +532,14 @@ if st.button("📄 Generate PDF"):
     # Non-blocking: highlight missing but continue generating the report
     st.session_state["_show_required_errors"] = True if missing_fields else False
     if missing_fields:
+        logger.warning(f"Missing {len(missing_fields)} required fields", extra={"fields": missing_fields})
         st.warning(
             "Some recommended fields are missing. The report will still be generated."
         )
 
     # Delegate PDF construction + filename logic to dedicated builder
-    pdf_bytes, file_name = build_survey_pdf(
+    try:
+        pdf_bytes, file_name = build_survey_pdf(
         answers=answers,
         sections_used=sections_used,
         hours=hours,
@@ -547,14 +556,18 @@ if st.button("📄 Generate PDF"):
         max_count=max_count,
         lang_map=lang_map,
         category=category,
-    )
-
-    st.success(
-        "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
-    )
-    st.download_button(
-        label="📄 Download PDF Report",
-        data=pdf_bytes,
-        file_name=file_name,
-        mime="application/pdf",
-    )
+        )
+        logger.info("PDF generated successfully", extra={"pdf_filename": file_name, "size_bytes": len(pdf_bytes)})
+        
+        st.success(
+            "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
+        )
+        st.download_button(
+            label="📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name=file_name,
+            mime="application/pdf",
+        )
+    except Exception as e:
+        logger.error("PDF generation failed", extra={"error": str(e), "make": make, "model": model}, exc_info=True)
+        st.error(f"Failed to generate PDF: {str(e)}")

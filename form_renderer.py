@@ -13,7 +13,10 @@ from typing import Any, Dict, List, Optional
 import copy
 import streamlit as st
 
+from utils.logger import setup_logger
 from visible_if import is_visible as _is_visible
+
+logger = setup_logger(__name__)
 
 
 def _find_field_index(fields: List[Dict[str, Any]], name: str) -> int:
@@ -313,4 +316,5 @@ def render_section(
             is_empty = (v is None) or (isinstance(v, str) and v.strip() == "") or (
                 isinstance(v, list) and len(v) == 0)
             if is_empty:
+                logger.warning(f"Required field missing: {name}", extra={"field": name, "type": ftype})
                 st.caption(":red[This field is required.]")
