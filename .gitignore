@@ -7,6 +7,11 @@ __pycache__/
 
 # Streamlit cache/config
 .streamlit/
+.streamlit/secrets.toml
+
+# Logs
+logs/
+*.log
 
 # Old backups you don't want in the repo
 old/
@@ -15,3 +20,6 @@ pages/old/
 
 # Office temp files
 ~$*.docx
+
+# macOS
+.DS_Store

@@ -3,11 +3,15 @@ import os
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from utils.logger import setup_logger
+from config import Config
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
+
+logger = setup_logger(__name__)
 
 
 def sanitize(text: Any) -> str:
@@ -121,19 +125,19 @@ def nbsp_units(s: str) -> str:
 
 # ---------------- PDF Layout Constants ----------------
 
-GRAY = (230, 230, 230)
-DARK = (60, 60, 60)
-LIGHT = (120, 120, 120)
-LINE_GRAY = (200, 200, 200)
+GRAY = Config.PDF_GRAY
+DARK = Config.PDF_DARK
+LIGHT = Config.PDF_LIGHT
+LINE_GRAY = Config.PDF_LINE_GRAY
 
-H_SECTION = 8
-H_ROW = 6.5
-H_TABLE = 7
-SPACE_AFTER_SEC = 1.2
-SPACE_AFTER_BLOCK = 1.2
+H_SECTION = Config.PDF_SECTION_HEIGHT
+H_ROW = Config.PDF_ROW_HEIGHT
+H_TABLE = Config.PDF_TABLE_HEIGHT
+SPACE_AFTER_SEC = Config.PDF_SPACE_AFTER_SECTION
+SPACE_AFTER_BLOCK = Config.PDF_SPACE_AFTER_BLOCK
 # Horizontal rule defaults (used by draw_hr and spacing checks)
-HR_THICK = 0.4
-HR_PAD = 2
+HR_THICK = Config.PDF_HR_THICKNESS
+HR_PAD = Config.PDF_HR_PAD
 
 
 def set_text_color(pdf: FPDF, rgb: Tuple[int, int, int]) -> None:
@@ -226,7 +230,7 @@ def page_title(pdf: FPDF, title: str, date_str: str, logo_path: Optional[str] = 
             y_pos = pdf.get_y() + 2
             pdf.image(logo_path, x=x_pos, y=y_pos, w=logo_w)
         except Exception as e:  # pragma: no cover - defensive logging
-            print("Logo draw error:", e)
+            logger.error(f"Logo draw error: {str(e)}", extra={"logo_path": logo_path}, exc_info=True)
 
     # Title text aligned left (not centered)
     pdf.set_font("Helvetica", "B", 17)
@@ -364,9 +368,14 @@ def center_image(
     y_top: Optional[float] = None,
 ) -> Tuple[float, float]:
     if not os.path.exists(path):
+        logger.warning(f"Image not found: {path}")
         return (0, 0)
-    with Image.open(path) as img:
-        w_img, h_img = img.size
+    try:
+        with Image.open(path) as img:
+            w_img, h_img = img.size
+    except Exception as e:
+        logger.error(f"Failed to open image: {path}", extra={"error": str(e)}, exc_info=True)
+        return (0, 0)
 
     page_w, page_h = pdf.w, pdf.h
     usable_w = page_w - pdf.l_margin - pdf.r_margin
@@ -912,49 +921,35 @@ def build_survey_pdf(
 
     # --- Photos: one per page ---
     if accepted_photos:
-        for photo_entry in accepted_photos[: max_count]:
+        logger.info(f"Processing {len(accepted_photos)} photos for PDF")
+        for photo in accepted_photos[: max_count]:
             temp_path: Optional[str] = None
             try:
                 pdf.add_page()
                 section_header(pdf, "Site Survey Photo")
-
-                # Support both legacy UploadedFile objects and the new optimized
-                # dict shape: {"name": str, "data": jpeg_bytes}
-                img_obj: Optional[Image.Image] = None
-                display_name: str = "photo"
-
-                if isinstance(photo_entry, dict):
-                    display_name = str(photo_entry.get("name") or "photo")
-                    raw_bytes = photo_entry.get("data")
-                    if isinstance(raw_bytes, (bytes, bytearray)):
-                        img_obj = Image.open(BytesIO(raw_bytes)).convert("RGB")
-                    else:
-                        # Fallback for any future shapes (e.g., file-like)
-                        if raw_bytes is not None:
-                            img_obj = Image.open(raw_bytes).convert("RGB")
-                else:
-                    # Legacy path: photo_entry is a Streamlit UploadedFile
-                    display_name = getattr(photo_entry, "name", "photo")
-                    img_obj = Image.open(photo_entry).convert("RGB")
-
-                if img_obj is None:
-                    raise RuntimeError("Unable to open image for PDF rendering")
-
-                temp_path = f"temp_{display_name}.jpg"
-                img_obj.save(temp_path, format="JPEG")
-                img_obj.close()
+                
+                # Open image and apply EXIF orientation correction
+                img = Image.open(photo)
+                img = ImageOps.exif_transpose(img)  # Auto-rotate based on EXIF data
+                img = img.convert("RGB")
+                
+                temp_path = f"temp_{photo.name}.jpg"
+                img.save(temp_path, format="JPEG")
+                img.close()
 
                 y_top = pdf.get_y()
                 max_w = pdf.w - pdf.l_margin - pdf.r_margin
                 max_h = pdf.h - y_top - pdf.b_margin - 5
                 center_image(pdf, temp_path, max_w=max_w, max_h=max_h, y_top=y_top)
-            except Exception:
+                logger.info(f"Photo processed successfully: {photo.name}")
+            except Exception as e:
+                logger.error(f"Failed to process photo: {photo.name}", extra={"error": str(e)}, exc_info=True)
                 pdf.set_font("Helvetica", "B", 11)
                 set_text_color(pdf, (200, 0, 0))
                 pdf.cell(
                     0,
                     H_ROW,
-                    text=sanitize(f"Error displaying image {getattr(photo_entry, 'name', display_name)}"),
+                    text=sanitize(f"Error displaying image {photo.name}"),
                     new_x=XPos.LMARGIN,
                     new_y=YPos.NEXT,
                 )

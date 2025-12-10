@@ -1,49 +1,211 @@
 import os
 import datetime
 import json
+import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
+from utils.logger import setup_logger
+from utils.database import SurveyDatabase
+from config import Config
 from data_loader import (
     load_catalog,
     load_questions,
     load_lang,
     get_data_version,
-    load_media_index,
+    load_media_index, 
 )
 from overrides import merge_overrides
-from form_renderer import (
-    apply_overrides as apply_field_overrides,
-    render_section,
-    seed_defaults,
-    normalize_admin_fields,
-)
+from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults, normalize_admin_fields  # newly added helper
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 from pdf_builder import build_survey_pdf
-from utils.images import process_survey_image
-from questions import get_questions_for
+
+# Setup logger
+logger = setup_logger(__name__)
+
+# Initialize database
+db = SurveyDatabase(Config.DATABASE_PATH)
+
+# ==================== Helper: Deserialize Draft Data ====================
+def deserialize_draft_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert serialized data types back to their original Python types.
+    Handles: datetime.time strings -> datetime.time objects
+    """
+    import re
+    from datetime import time as datetime_time
+    
+    deserialized = {}
+    for key, value in data.items():
+        # Convert time strings back to datetime.time objects
+        # Streamlit serializes times as "HH:MM:SS" or "HH:MM"
+        if isinstance(value, str) and re.match(r'^\d{1,2}:\d{2}(:\d{2})?$', value):
+            try:
+                parts = value.split(':')
+                hour = int(parts[0])
+                minute = int(parts[1])
+                second = int(parts[2]) if len(parts) > 2 else 0
+                deserialized[key] = datetime_time(hour, minute, second)
+                continue
+            except:
+                pass
+        
+        deserialized[key] = value
+    
+    return deserialized
+
+
+def _validate_session_state() -> None:
+    """
+    Debug helper to ensure no orphaned widget keys.
+    Checks that form data is properly centralized in form_data dict.
+    """
+    if "form_data" not in st.session_state:
+        return
+    
+    form_data_keys = set(st.session_state["form_data"].keys())
+    
+    # Known non-form keys that should exist in session_state
+    known_system_keys = {
+        "form_data", "survey_id", "last_autosave", "show_drafts", 
+        "_show_required_errors", "_current_model_key",
+        "make_sel", "model_sel",
+        "same_weekdays", "weekend_closed", "apply_hours_presets",
+        "weekday_open_preset", "weekday_close_preset"
+    }
+    
+    # Check for orphaned widget keys (form fields that aren't in form_data)
+    orphaned = []
+    for key in st.session_state.keys():
+        # Skip internal Streamlit keys
+        if key.startswith("_") and key not in {"_show_required_errors", "_current_model_key"}:
+            continue
+        # Skip known system keys
+        if key in known_system_keys:
+            continue
+        # Skip button/form submission keys
+        if key.startswith(("FormSubmitter:", "load_", "del_", "download_")):
+            continue
+        # Skip hours of operation keys (managed separately)
+        if key.startswith(("open_", "close_", "closed_")):
+            continue
+        # If it's not in form_data, it might be orphaned
+        if key not in form_data_keys:
+            orphaned.append(key)
+    
+    if orphaned:
+        logger.warning(f"Orphaned session keys found: {orphaned}")
+        # In development, you might want to see this:
+        # st.warning(f"Debug: Found {len(orphaned)} orphaned keys: {orphaned[:5]}")
 
 # ---------------- App Config ----------------
 
 # st.set_page_config(page_title="Site Survey Form", layout="centered")
-st.set_page_config(
-    page_title="Site Survey Form",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-st.title("📋 Site Survey Form")
+st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="expanded")
 
-# --- Global session state initialization for survey answers + flags ---
-if "form_data" not in st.session_state:
-    st.session_state["form_data"] = {}
-if "_current_model_key" not in st.session_state:
-    st.session_state["_current_model_key"] = None
-if "_show_required_errors" not in st.session_state:
-    st.session_state["_show_required_errors"] = False
-# For normalized + optimized photos used across UI + PDF
-if "uploaded_photos" not in st.session_state:
-    st.session_state["uploaded_photos"] = []
+# ==================== Sidebar: Draft Management & Export ====================
+with st.sidebar:
+    st.title("📋 Survey Management")
+    
+    # Initialize show_drafts flag if not present
+    if "show_drafts" not in st.session_state:
+        st.session_state["show_drafts"] = False
+    
+    if st.button("📂 View My Drafts"):
+        st.session_state["show_drafts"] = not st.session_state["show_drafts"]
+    
+    if st.session_state.get("show_drafts"):
+        drafts = db.list_drafts(limit=20)
+        
+        if drafts:
+            st.markdown("### Recent Drafts")
+            for survey_id, store, make_draft, model_draft, updated_at, tech in drafts:
+                # Format timestamp
+                try:
+                    dt = datetime.datetime.fromisoformat(updated_at)
+                    time_ago = dt.strftime("%b %d, %I:%M %p")
+                except:
+                    time_ago = updated_at[:16] if updated_at else "Unknown"
+                
+                # Display draft info
+                draft_label = f"{store or 'Unnamed Store'} - {make_draft} {model_draft}"
+                st.markdown(f"**{draft_label}**")
+                st.caption(f"Last saved: {time_ago}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📥 Load", key=f"load_{survey_id}"):
+                        loaded_data = db.load_draft(survey_id)
+                        if loaded_data:
+                            # Deserialize data types (time strings -> time objects)
+                            loaded_data = deserialize_draft_data(loaded_data)
+                            
+                            # Initialize form_data if not present
+                            if "form_data" not in st.session_state:
+                                st.session_state["form_data"] = {}
+                            
+                            # Restore session state, routing form fields to form_data
+                            skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
+                                         "apply_hours_presets", "_show_required_errors", "_current_model_key",
+                                         "weekday_open_preset", "weekday_close_preset", "form_data"}
+                            skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
+                            
+                            # First, restore form_data if it exists in loaded data
+                            if "form_data" in loaded_data:
+                                st.session_state["form_data"] = loaded_data["form_data"]
+                            
+                            # Then restore other session state (hours, system keys, etc.)
+                            for key, value in loaded_data.items():
+                                if key == "form_data":
+                                    continue  # Already handled
+                                if key in skip_exact or any(key.startswith(prefix) for prefix in skip_prefixes):
+                                    continue
+                                try:
+                                    st.session_state[key] = value
+                                except:
+                                    pass
+                            
+                            st.session_state["survey_id"] = survey_id
+                            logger.info(f"Draft loaded from sidebar", extra={"survey_id": survey_id})
+                            st.success("Draft loaded!")
+                            st.rerun()
+                with col2:
+                    if st.button("🗑️ Delete", key=f"del_{survey_id}"):
+                        if db.delete_draft(survey_id):
+                            st.success("Draft deleted")
+                            st.rerun()
+                
+                st.divider()
+        else:
+            st.info("No drafts found")
+    
+    # Export current draft as JSON
+    st.markdown("---")
+    st.markdown("### Export Current Survey")
+    
+    if st.session_state.get("survey_id"):
+        if st.button("💾 Export Draft (JSON)"):
+            export_data = dict(st.session_state)
+            export_json = json.dumps(export_data, indent=2, default=str)
+            st.download_button(
+                "📥 Download JSON",
+                data=export_json,
+                file_name=f"survey_draft_{st.session_state['survey_id']}.json",
+                mime="application/json",
+                key="download_json_btn"
+            )
+        
+        st.caption("💡 **Tip:** Download your draft before closing the browser to avoid data loss on Streamlit Cloud.")
+    else:
+        st.caption("Start a survey to enable export")
+    
+    # NOTE about Streamlit Cloud ephemeral storage
+    st.markdown("---")
+    st.caption("⚠️ **Note:** On Streamlit Cloud, the database is temporary and resets on app restart. Export important drafts before closing.")
+
+st.title("📋 Site Survey Form")
 
 # Load data-driven resources
 version = get_data_version()
@@ -58,14 +220,12 @@ lang_map = load_lang("en", version)
 # --- Load Settings (branding + logo) ---
 SETTINGS_FP = os.path.join("data", "settings.json")
 
-
 def load_settings():
     try:
         with open(SETTINGS_FP, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except:
         return {"branding": {}, "media": {}}
-
 
 def _hero_path(filename: str | None):
     """
@@ -107,13 +267,26 @@ def _hero_path(filename: str | None):
 
     # Not found — still return local path where it SHOULD be
     return local_paths[0]
-
-
+    
 settings = load_settings()
 
 # Extract the selected hero/logo file
 settings_logo = settings.get("media", {}).get("hero_image", "")
 settings_logo_path = _hero_path(settings_logo)
+# st.write("DEBUG: settings_logo =", settings_logo)
+# st.write("DEBUG: settings_logo_path =", settings_logo_path)
+
+# if isinstance(settings_logo_path, str):
+#     st.write("Exists on disk? ->", os.path.exists(settings_logo_path))
+# else:
+#     st.write("Exists on disk? ->", False)
+
+
+# Language toggle (scaffold for future FR)
+# lang_choice = st.selectbox("Language", ["English"], index=0)
+# TODO: When adding French or other locales:
+# - replace hardcoded "en" in load_lang("en", version)
+# - map lang_choice -> "en", "fr_qc", etc.
 
 # --- Equipment Selection (Make → Model; Category derived from model) ---
 st.subheader(f"1. {lang_map.get('section.site_info', 'Site Information')}")
@@ -127,9 +300,7 @@ def make_label(k: str) -> str:
 
 
 def model_label(mk: str, mdk: str) -> str:
-    return ((makes_map.get(mk) or {}).get("models", {}).get(mdk) or {}).get(
-        "label", mdk
-    )
+    return ((makes_map.get(mk) or {}).get("models", {}).get(mdk) or {}).get("label", mdk)
 
 
 def normalize_category(c: str) -> str:
@@ -151,36 +322,26 @@ def normalize_category(c: str) -> str:
 
 
 # Make selector
-make_key = (
-    st.selectbox(
-        "Make",
-        options=list(makes_map.keys()),
-        format_func=lambda k: make_label(k),
-        key="make_sel",
-    )
-    if makes_map
-    else None
-)
+make_key = st.selectbox(
+    "Make",
+    options=list(makes_map.keys()),
+    format_func=lambda k: make_label(k),
+    key="make_sel",
+) if makes_map else None
 
 # Model selector scoped to make
 models_map_for_make: Dict[str, Dict[str, Any]] = (
-    makes_map.get(make_key) or {}
-).get("models", {}) if make_key else {}
-model_key = (
-    st.selectbox(
-        "Model",
-        options=list(models_map_for_make.keys()),
-        format_func=lambda k: model_label(make_key, k),
-        key="model_sel",
-    )
-    if models_map_for_make
-    else None
-)
+    makes_map.get(make_key) or {}).get("models", {}) if make_key else {}
+model_key = st.selectbox(
+    "Model",
+    options=list(models_map_for_make.keys()),
+    format_func=lambda k: model_label(make_key, k),
+    key="model_sel",
+) if models_map_for_make else None
 
 # Pull selected model meta + derive category
 selected_model: Dict[str, Any] = (
-    models_map_for_make.get(model_key) or {} if model_key else {}
-)
+    models_map_for_make.get(model_key) or {}) if model_key else {}
 # e.g., "smart_safe", "recycler", etc.
 category = normalize_category(selected_model.get("category", ""))
 make = make_label(make_key) if make_key else None
@@ -194,7 +355,65 @@ if not (make and model):
     model_meta = {}
 else:
     # model_key and model_meta already set above
-    pass
+    logger.info(f"Equipment selected - Make: {make}, Model: {model}, Category: {category}")
+    
+    # ==================== Survey Session Management ====================
+    # Check if survey_id exists, otherwise look for recent draft or create new
+    if "survey_id" not in st.session_state:
+        # Check for recent draft matching this make/model
+        recent_draft_id = db.find_recent_draft(make, model, limit_hours=24)
+        
+        if recent_draft_id:
+            # Offer to resume draft
+            st.info(f"📂 Found a recent draft for {make} {model}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📥 Resume Draft"):
+                    loaded_data = db.load_draft(recent_draft_id)
+                    if loaded_data:
+                        # Deserialize data types (time strings -> time objects)
+                        loaded_data = deserialize_draft_data(loaded_data)
+                        
+                        # Initialize form_data if not present
+                        if "form_data" not in st.session_state:
+                            st.session_state["form_data"] = {}
+                        
+                        # Restore session state, routing form fields to form_data
+                        skip_exact = {"make_sel", "model_sel", "show_drafts", "same_weekdays", "weekend_closed", 
+                                     "apply_hours_presets", "_show_required_errors", "_current_model_key",
+                                     "weekday_open_preset", "weekday_close_preset", "form_data"}
+                        skip_prefixes = ("load_", "del_", "FormSubmitter:", "download_json_btn")
+                        
+                        # First, restore form_data if it exists in loaded data
+                        if "form_data" in loaded_data:
+                            st.session_state["form_data"] = loaded_data["form_data"]
+                        
+                        # Then restore other session state (hours, system keys, etc.)
+                        for key, value in loaded_data.items():
+                            if key == "form_data":
+                                continue  # Already handled
+                            if key in skip_exact or any(key.startswith(prefix) for prefix in skip_prefixes):
+                                continue
+                            try:
+                                st.session_state[key] = value
+                            except:
+                                pass
+                        
+                        st.session_state["survey_id"] = recent_draft_id
+                        logger.info(f"Resumed draft", extra={"survey_id": recent_draft_id})
+                        st.success("Draft loaded! Scroll down to continue.")
+                        st.rerun()
+            with col2:
+                if st.button("🆕 Start Fresh"):
+                    st.session_state["survey_id"] = str(uuid.uuid4())
+                    st.session_state["last_autosave"] = 0
+                    logger.info(f"Started new survey", extra={"survey_id": st.session_state["survey_id"]})
+                    st.rerun()
+        else:
+            # No recent draft, create new survey ID
+            st.session_state["survey_id"] = str(uuid.uuid4())
+            st.session_state["last_autosave"] = 0
+            logger.info(f"Created new survey", extra={"survey_id": st.session_state["survey_id"]})
 
 # Dimensions and hero image
 model_dims = model_meta.get("dimensions", {}) if model_meta else {}
@@ -205,10 +424,10 @@ model_height = model_dims.get("height", "")
 # New admin media placement:
 media = model_meta.get("media", {}) or {}
 hero_image = media.get("hero_image") or model_meta.get(
-    "hero_image"
-)  # support legacy field if present
+    "hero_image")  # support legacy field if present
 
 image_path = _hero_path(hero_image)
+
 
 # Equipment info display
 st.markdown(f"**Weight:** {model_weight}")
@@ -216,9 +435,10 @@ st.markdown(f"**Width:** {model_width}")
 st.markdown(f"**Depth:** {model_depth}")
 st.markdown(f"**Height:** {model_height}")
 
+# (already resolved above)
+
 # ✅ Responsive hero image without breaking st.image
-st.markdown(
-    """
+st.markdown("""
 <style>
 .hero-wrap {
   display: flex;
@@ -246,19 +466,20 @@ st.markdown(
   }
 }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
+
 
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
     # hard cap the width; Streamlit will scale down, not up
     st.image(image_path, caption=f"{make} {model}", width=600)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
 # Prepare composed sections for current selection
 base_sections = qdef.get("base_sections", [])
-category_sections = (qdef.get("category_packs", {}) or {}).get(category, []) or []
+category_sections = (qdef.get("category_packs", {})
+                     or {}).get(category, []) or []
 sections_composed = base_sections + category_sections
 
 # Merge overrides and apply to sections
@@ -266,8 +487,8 @@ merged = merge_overrides(qdef, category=category, make=make, model=model)
 sections_used = apply_field_overrides(sections_composed, merged)
 
 # ---- Inject Admin-defined fields (Category -> "Delivery") into the composed sections ----
-
-
+# Derive cat_key in the same shape Admin uses as a top-level key in questions.json.
+# Admin saves under lowercase slug with underscores (e.g., "smart_safe").
 def _to_cat_key(label: str, model_meta: Dict[str, Any]) -> str:
     # Prefer the original model-provided category slug if present (e.g., "smart_safe")
     raw = (model_meta or {}).get("category")
@@ -276,25 +497,12 @@ def _to_cat_key(label: str, model_meta: Dict[str, Any]) -> str:
     # Fallback from normalized Category label ("Smart Safe" -> "smart_safe")
     return (label or "").strip().lower().replace("-", "_").replace(" ", "_")
 
-
 cat_key = _to_cat_key(category, model_meta)
-
-# -------------------------
-# Inject Admin-defined fields per section
-# -------------------------
-
-# 1) Delivery: combine category + model-specific admin questions
-admin_questions_delivery = get_questions_for(
-    qdef,
-    category_key=cat_key,
-    section_name="Delivery",
-    make_key=make_key,
-    model_key=model_key,
-)
-admin_fields_delivery = normalize_admin_fields(cat_key, "Delivery", admin_questions_delivery)
+admin_fields_delivery = normalize_admin_fields(cat_key, "Delivery", qdef)
 
 if admin_fields_delivery:
-    # For Smart Safe we prefer "smart_safe_additions"; otherwise fall back to delivery_base.
+    # Find a target section to receive these. For Smart Safe we prefer "smart_safe_additions",
+    # otherwise we fall back to the base delivery block.
     target = None
     for sec in sections_used:
         if sec.get("key") == "smart_safe_additions":
@@ -302,33 +510,15 @@ if admin_fields_delivery:
             break
     if target is None:
         for sec in sections_used:
-            if (
-                sec.get("key") == "delivery_base"
-                or sec.get("title_key") == "section.delivery"
-            ):
+            if sec.get("key") == "delivery_base" or sec.get("title_key") == "section.delivery":
                 target = sec
                 break
     if target is not None:
         target.setdefault("fields", []).extend(admin_fields_delivery)
 
-# 2) Installation: attach to the Installation Location section
-admin_questions_install = get_questions_for(
-    qdef,
-    category_key=cat_key,
-    section_name="Installation",
-    make_key=make_key,
-    model_key=model_key,
-)
-admin_fields_install = normalize_admin_fields(cat_key, "Installation", admin_questions_install)
-
-if admin_fields_install:
-    for sec in sections_used:
-        if (
-            sec.get("key") == "installation_location"
-            or sec.get("title_key") == "section.installation_location"
-        ):
-            sec.setdefault("fields", []).extend(admin_fields_install)
-            break
+# Initialize form_data as single source of truth
+if "form_data" not in st.session_state:
+    st.session_state["form_data"] = {}
 
 # On model change, seed defaults
 curr_model_key = st.session_state.get("_current_model_key")
@@ -336,41 +526,40 @@ if curr_model_key != model_key:
     # reset error flag on model change
     st.session_state["_show_required_errors"] = False
     st.session_state["_current_model_key"] = model_key
-    # seed defaults from overrides into canonical form_data
-    seed_defaults(
-        st.session_state["form_data"],
-        merged.get("defaults", {}),
-        overwrite_empty_only=True,
-    )
+    # seed defaults from overrides directly into form_data
+    seed_defaults(st.session_state["form_data"], merged.get(
+        "defaults", {}), overwrite_empty_only=True)
 
-# Working answers dict view backed by session_state.form_data
+# Single source of truth: answers IS st.session_state["form_data"]
 answers: Dict[str, Any] = st.session_state["form_data"]
 
-def _normalize_exts(exts: list[str] | None) -> list[str]:
+# ==================== Autosave Helper Function ====================
+def try_autosave():
     """
-    Normalize a list of file extensions:
-
-    - Lowercase
-    - Ensure each starts with '.'
-    - De-duplicate
+    Attempt to autosave current form state if enough time has passed.
+    Runs silently - shows subtle indicator only on success.
     """
-    if not exts:
-        return []
-    seen = set()
-    norm: list[str] = []
-    for ext in exts:
-        if not ext:
-            continue
-        e = ext.lower().strip()
-        if not e:
-            continue
-        if not e.startswith("."):
-            e = "." + e
-        if e not in seen:
-            seen.add(e)
-            norm.append(e)
-    return norm
-
+    if not st.session_state.get("survey_id"):
+        return
+    
+    if not (make and model):
+        return
+    
+    current_time = time.time()
+    last_save_time = st.session_state.get("last_autosave", 0)
+    
+    if current_time - last_save_time > Config.AUTOSAVE_INTERVAL_SECONDS:
+        # Prepare snapshot of current state
+        save_data = dict(st.session_state)
+        save_data["make"] = make
+        save_data["model"] = model
+        save_data["category"] = category
+        
+        # Save to database
+        if db.save_draft(st.session_state["survey_id"], save_data):
+            st.session_state["last_autosave"] = current_time
+            # Subtle success indicator (don't distract user)
+            st.caption("💾 Draft saved")
 
 # --- Upload Site Photos with rules ---
 st.subheader("2. Upload Site Photos")
@@ -380,96 +569,49 @@ rules = dict(model_meta.get("photo_rules", {}) or {})
 
 max_count: int = int(rules.get("max_count", 20))
 max_mb_each: float = float(rules.get("max_mb_each", 8))
-
-raw_allowed_exts = rules.get("allowed_ext")
-if not raw_allowed_exts:
-    # Default: jpg + jpeg + png
-    allowed_exts: List[str] = [".jpg", ".jpeg", ".png"]
-else:
-    # Normalize whatever was provided in config
-    if isinstance(raw_allowed_exts, str):
-        raw_allowed_exts = [raw_allowed_exts]
-    allowed_exts = _normalize_exts(raw_allowed_exts)
+allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
 
 # Convert to streamlit extension list without dot
-st_types = [ext[1:] for ext in allowed_exts]
-
-allowed_label = ", ".join(ext.lstrip(".").upper() for ext in allowed_exts)
+st_types = [ext[1:] if ext.startswith(".") else ext for ext in allowed_exts]
 
 photos_all = st.file_uploader(
     f"Upload up to {max_count} site photos",
     type=st_types,
-    accept_multiple_files=True,
-    help=f"Limit {max_mb_each:.0f}MB per file \u2022 {allowed_label}",
+    accept_multiple_files=True
 )
 
 accepted_photos: List[Any] = []
-optimized_photos: List[Dict[str, Any]] = []
-
 if photos_all:
     too_many = len(photos_all) > max_count
     if too_many:
         st.error(
-            f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored."
-        )
+            f"Too many photos. {len(photos_all)} uploaded; maximum is {max_count}. Extra files will be ignored.")
     for photo in photos_all[:max_count]:
         # Validate extension
         name_lower = photo.name.lower()
         if not any(name_lower.endswith(ext) for ext in allowed_exts):
             st.error(
-                f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}"
-            )
+                f"File {photo.name} has an invalid extension. Allowed: {', '.join(allowed_exts)}")
             continue
         # Validate size
         size_mb = (photo.size or 0) / (1024 * 1024)
         if size_mb > max_mb_each:
             st.error(
-                f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB)."
-            )
+                f"File {photo.name} exceeds max size of {max_mb_each} MB (got {size_mb:.1f} MB).")
             continue
-
-        # Keep original upload reference for count/metadata
         accepted_photos.append(photo)
 
-        # One-time orientation + resize + JPEG compression for storage/PDF.
-        try:
-            jpeg_bytes = process_survey_image(photo)
-        except Exception:
-            # If processing fails, fall back to raw bytes where possible so we still render something
-            try:
-                jpeg_bytes = photo.getvalue()  # type: ignore[assignment]
-            except Exception:
-                try:
-                    jpeg_bytes = photo.read()  # type: ignore[assignment]
-                except Exception:
-                    jpeg_bytes = b""
-
-        optimized_photos.append({"name": photo.name, "data": jpeg_bytes})
-else:
-    # If user clears the uploader, reset state
-    accepted_photos = []
-    optimized_photos = []
-
-# Persist optimized photos (already oriented + compressed) in session state
-st.session_state["uploaded_photos"] = optimized_photos
-
-# Keep a simple reference in form_data answers (e.g., for names/metadata)
-answers["photos"] = [p.get("name") for p in optimized_photos]
-
+answers["photos"] = accepted_photos
 st.caption(f"{len(accepted_photos)} / {max_count} photos uploaded")
 
-# Preview thumbnails using optimized images (JPEG bytes)
-if optimized_photos:
+# Preview thumbnails
+if accepted_photos:
     cols = st.columns(5)
-    for i, photo_entry in enumerate(optimized_photos):
-        img_bytes = photo_entry.get("data") or b""
-        if not img_bytes:
-            continue
+    for i, photo in enumerate(accepted_photos):
         with cols[i % 5]:
             try:
-                st.image(img_bytes, caption=photo_entry.get("name", ""), width=140)
+                st.image(photo, caption=photo.name, width=140)
             except Exception:
-                # If preview fails for a specific image, just skip it
                 pass
 
 # --- Site Information ---
@@ -479,54 +621,46 @@ for _sec in sections_used:
         # Remove any "Store Hours" style field from this section
         def _skip_store_hours(f):
             name = (f.get("name") or "").strip().lower()
-            label = (
-                lang_map.get(f.get("label_key") or "", f.get("label") or "") or ""
-            ).strip().lower()
-            return (
-                name not in {"store_hours", "hours", "storehours"}
-                and "store hours" not in label
-            )
+            label = (lang_map.get(f.get("label_key") or "",
+                     f.get("label") or "") or "").strip().lower()
+            return name not in {"store_hours", "hours", "storehours"} and "store hours" not in label
 
         sec_no_hours = dict(_sec)
-        sec_no_hours["fields"] = [
-            f for f in (_sec.get("fields") or []) if _skip_store_hours(f)
-        ]
+        sec_no_hours["fields"] = [f for f in (
+            _sec.get("fields") or []) if _skip_store_hours(f)]
 
         render_section(
-            sec_no_hours,
-            answers,
-            lang=lang_map,
-            category=category,
-            make=make,
-            model=model,
-            show_required_errors=bool(st.session_state.get("_show_required_errors")),
+            sec_no_hours, answers, lang=lang_map, category=category, make=make, model=model,
+            show_required_errors=bool(
+                st.session_state.get('_show_required_errors'))
         )
         break
+
+# Autosave after Site Information
+try_autosave()
 
 # --- Contact Info ---
-st.subheader(f"4. {lang_map.get('section.contact_info', 'Contact Information')}")
+st.subheader(
+    f"4. {lang_map.get('section.contact_info', 'Contact Information')}")
 for _sec in sections_used:
     if _sec.get("key") == "contact_info":
-        render_section(
-            _sec,
-            answers,
-            lang=lang_map,
-            category=category,
-            make=make,
-            model=model,
-            show_required_errors=bool(st.session_state.get("_show_required_errors")),
-        )
+        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
+                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
         break
+
+# Autosave after Contact Info
+try_autosave()
 
 # --- Hours of Operation ---
 st.subheader("5. Hours of Operation")
 
-days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+days = ["Monday", "Tuesday", "Wednesday",
+        "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Default times and step for the time picker
-DEFAULT_OPEN_TIME = datetime.time(8, 0)  # 08:00
-DEFAULT_CLOSE_TIME = datetime.time(20, 0)  # 20:00 (8 PM)
-TIME_STEP = datetime.timedelta(minutes=30)  # 30-minute increments
+DEFAULT_OPEN_TIME = datetime.time(8, 0)   # 08:00
+DEFAULT_CLOSE_TIME = datetime.time(20, 0) # 20:00 (8 PM)
+TIME_STEP = datetime.timedelta(minutes=Config.TIME_PICKER_STEP_MINUTES)
 
 # ---------- Quick presets (optional) ----------
 st.markdown("**Quick Setup (optional)**")
@@ -615,65 +749,44 @@ for day in days:
 
 answers["hours"] = hours
 
+# Autosave after Hours of Operation
+try_autosave()
+
 # --- Delivery Instructions ---
 st.subheader(f"6. {lang_map.get('section.delivery', 'Delivery Instructions')}")
 for _sec in sections_used:
     if _sec.get("key") in ("delivery_base", "smart_safe_additions"):
-        render_section(
-            _sec,
-            answers,
-            lang=lang_map,
-            category=category,
-            make=make,
-            model=model,
-            show_required_errors=bool(st.session_state.get("_show_required_errors")),
-        )
+        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
+                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
+
+# Autosave after Delivery Instructions
+try_autosave()
 
 # --- Additional Category Sections ---
 for _sec in sections_used:
-    if _sec.get("key") not in (
-        "contact_info",
-        "installation_location",
-        "site_info",
-        "delivery_base",
-        "smart_safe_additions",
-    ):
-        sec_title = lang_map.get(_sec.get("title_key", ""), _sec.get("title", ""))
+    if _sec.get("key") not in ("contact_info", "installation_location", "site_info", "delivery_base", "smart_safe_additions"):
+        sec_title = lang_map.get(
+            _sec.get("title_key", ""), _sec.get("title", ""))
         if sec_title:
             st.subheader(sec_title)
-        render_section(
-            _sec,
-            answers,
-            lang=lang_map,
-            category=category,
-            make=make,
-            model=model,
-            show_required_errors=bool(st.session_state.get("_show_required_errors")),
-        )
+        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
+                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
 
 # --- Installation Location ---
 st.subheader(
-    f"7. {lang_map.get('section.installation_location', 'Installation Location')}"
-)
+    f"7. {lang_map.get('section.installation_location', 'Installation Location')}")
 for _sec in sections_used:
     if _sec.get("key") == "installation_location":
-        render_section(
-            _sec,
-            answers,
-            lang=lang_map,
-            category=category,
-            make=make,
-            model=model,
-            show_required_errors=bool(st.session_state.get("_show_required_errors")),
-        )
+        render_section(_sec, answers, lang=lang_map, category=category, make=make, model=model,
+                       show_required_errors=bool(st.session_state.get('_show_required_errors')))
         break
+
+# Autosave after Installation Location
+try_autosave()
 
 # ---------------- Submit -> Validate -> Build PDF ----------------
 
-
-def _collect_missing_required(
-    sections: List[Dict[str, Any]], state: Dict[str, Any]
-) -> List[str]:
+def _collect_missing_required(sections: List[Dict[str, Any]], state: Dict[str, Any]) -> List[str]:
     missing: List[str] = []
     for sec in sections:
         for fld in sec.get("fields", []) or []:
@@ -682,15 +795,16 @@ def _collect_missing_required(
             if not visible_if_field(fld, state, category, make, model):
                 continue
             v = state.get(fld.get("name"))
-            is_empty = (v is None) or (
-                isinstance(v, str) and v.strip() == ""
-            ) or (isinstance(v, list) and len(v) == 0)
+            is_empty = (v is None) or (isinstance(v, str) and v.strip() == "") or (
+                isinstance(v, list) and len(v) == 0)
             if is_empty:
                 missing.append(fld.get("name"))
     return missing
 
 
 if st.button("📄 Generate PDF"):
+    logger.info("PDF generation initiated", extra={"make": make, "model": model})
+    
     # Merge collected inputs into session_state-based answers for validation
     validate_state = dict(st.session_state)
     validate_state.update(answers)
@@ -699,12 +813,14 @@ if st.button("📄 Generate PDF"):
     # Non-blocking: highlight missing but continue generating the report
     st.session_state["_show_required_errors"] = True if missing_fields else False
     if missing_fields:
+        logger.warning(f"Missing {len(missing_fields)} required fields", extra={"fields": missing_fields})
         st.warning(
             "Some recommended fields are missing. The report will still be generated."
         )
 
     # Delegate PDF construction + filename logic to dedicated builder
-    pdf_bytes, file_name = build_survey_pdf(
+    try:
+        pdf_bytes, file_name = build_survey_pdf(
         answers=answers,
         sections_used=sections_used,
         hours=hours,
@@ -717,19 +833,30 @@ if st.button("📄 Generate PDF"):
         model_height=model_height,
         image_path=image_path,
         settings_logo_path=settings_logo_path,
-        # Use optimized photos (already oriented + resized + compressed)
-        accepted_photos=st.session_state.get("uploaded_photos", []),
+        accepted_photos=accepted_photos,
         max_count=max_count,
         lang_map=lang_map,
         category=category,
-    )
-
-    st.success(
-        "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
-    )
-    st.download_button(
-        label="📄 Download PDF Report",
-        data=pdf_bytes,
-        file_name=file_name,
-        mime="application/pdf",
-    )
+        )
+        logger.info("PDF generated successfully", extra={"pdf_filename": file_name, "size_bytes": len(pdf_bytes)})
+        
+        # Mark survey as complete in database
+        if st.session_state.get("survey_id"):
+            db.mark_complete(st.session_state["survey_id"], file_name)
+            logger.info("Survey marked complete", extra={
+                "survey_id": st.session_state["survey_id"],
+                "pdf_filename": file_name
+            })
+        
+        st.success(
+            "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
+        )
+        st.download_button(
+            label="📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name=file_name,
+            mime="application/pdf",
+        )
+    except Exception as e:
+        logger.error("PDF generation failed", extra={"error": str(e), "make": make, "model": model}, exc_info=True)
+        st.error(f"Failed to generate PDF: {str(e)}")
