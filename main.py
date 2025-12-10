@@ -518,8 +518,8 @@ st.markdown("""
 
 if image_path and os.path.exists(image_path):
     st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
-    # Use use_container_width=True for responsive behavior
-    st.image(image_path, caption=f"{make} {model}", use_container_width=True)
+    # Use use_column_width=True for responsive behavior
+    st.image(image_path, caption=f"{make} {model}", use_column_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -674,7 +674,7 @@ if Config.ENABLE_CLIENT_COMPRESSION:
                 continue
             with cols[i % num_cols]:
                 try:
-                    st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_container_width=True)
+                    st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_column_width=True)
                 except Exception:
                     pass
     else:
