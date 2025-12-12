@@ -492,35 +492,33 @@ st.markdown("""
 
 /* Mobile Landscape: phones 481px - 767px */
 @media (min-width: 481px) and (max-width: 767px) {
-  .hero-wrap img {
+  .hero-wrap {
     max-width: 90vw !important;
-    max-height: 50vh !important;
   }
 }
 
 /* Tablet: 768px - 1024px */
 @media (min-width: 768px) and (max-width: 1024px) {
-  .hero-wrap img {
+  .hero-wrap {
     max-width: 500px !important;
-    max-height: 600px !important;
   }
 }
 
 /* Desktop: 1025px and up */
 @media (min-width: 1025px) {
-  .hero-wrap img {
-    max-width: 600px !important;
-    max-height: 700px !important;
+  .hero-wrap {
+    max-width: 500px !important;
   }
 }
 </style>
 """, unsafe_allow_html=True)
 
 if image_path and os.path.exists(image_path):
-    st.markdown('<div class="hero-wrap">', unsafe_allow_html=True)
-    # Use use_column_width=True for responsive behavior
-    st.image(image_path, caption=f"{make} {model}", use_column_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # On desktop, use narrow columns to constrain image width
+    # On mobile, columns auto-adjust
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.image(image_path, caption=f"{make} {model}")
 
 
 # Prepare composed sections for current selection
