@@ -40,13 +40,17 @@
       "path": "C:\\Python Projects\\Site_Survey\\assets\\Tidel-D4-D4e-BNF_NoStorageVault_XL.png",
       "ts": 1763999540.570328
     },
+    "Tidel-S4-S4e-BNF_StorageVault_STD.jpg": {
+      "path": "C:\\Python Projects\\Site_Survey\\assets\\Tidel-S4-S4e-BNF_StorageVault_STD.jpg",
+      "ts": 1766018511.0
+    },
+    "Tidel-S4-S4e-BNF_StorageVault_XL.jpg": {
+      "path": "C:\\Python Projects\\Site_Survey\\assets\\Tidel-S4-S4e-BNF_StorageVault_XL.jpg",
+      "ts": 1766018558.0
+    },
     "tidel_d3.png": {
       "path": "C:\\Python Projects\\Site_Survey\\assets\\tidel_d3.png",
       "ts": 1761076771.4307632
-    },
-    "tidel_d4.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\tidel_d4.png",
-      "ts": 1761339884.2483885
     },
     "kisan-newton-3.png": {
       "path": "C:\\Python Projects\\Site_Survey\\data\\media\\kisan-newton-3.png",
@@ -67,6 +71,14 @@
     "tidel_d4_snf_w_riser_std.jpg": {
       "path": "C:\\Python Projects\\Site_Survey\\data\\media\\tidel_d4_snf_w_riser_std.jpg",
       "ts": 1765389789.579432
+    },
+    "tidel_s4_s4e_bnf_storagevault_std.jpg": {
+      "path": "C:\\Python Projects\\Site_Survey\\data\\media\\tidel_s4_s4e_bnf_storagevault_std.jpg",
+      "ts": 1770653902.5031476
+    },
+    "tidel_s4_s4e_bnf_storagevault_xl.jpg": {
+      "path": "C:\\Python Projects\\Site_Survey\\data\\media\\tidel_s4_s4e_bnf_storagevault_xl.jpg",
+      "ts": 1770653902.5031476
     }
   },
   "brochures": {
