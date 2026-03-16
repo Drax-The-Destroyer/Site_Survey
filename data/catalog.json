@@ -11,6 +11,11 @@
             "width": "259 mm / 10.2 in",
             "depth": "482 mm / 19.0 in",
             "height": "705 mm / 27.8 in"
+          },
+          "media": {
+            "hero_image": "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
+            "gallery": [],
+            "brochures": []
           }
         },
         "chipotle_mexican_grill_tidel_d4_snf_std": {
@@ -21,6 +26,11 @@
             "width": "311 mm / 12.2 in",
             "depth": "584 mm / 23.0 in",
             "height": "457 mm / 18 in"
+          },
+          "media": {
+            "hero_image": "tidel_d4_snf_nostoragevault_std.jpg",
+            "gallery": [],
+            "brochures": []
           }
         },
         "tidel_series_4_standard_with_drop_vault": {
@@ -33,7 +43,7 @@
             "height": "781 mm / 30.75 in"
           },
           "media": {
-            "hero_image": "tidel_s4_s4e_bnf_storagevault_std.jpg",
+            "hero_image": "Tidel-S4-S4e-BNF_StorageVault_STD.jpg",
             "gallery": [],
             "brochures": []
           }
@@ -48,7 +58,22 @@
             "height": "781 mm / 30.75 in"
           },
           "media": {
-            "hero_image": "tidel_s4_s4e_bnf_storagevault_xl.jpg",
+            "hero_image": "Tidel-S4-S4e-BNF_StorageVault_XL.jpg",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "tidel_series_3_snf_w_storage_vault": {
+          "label": "TiDel Series 3 SNF w Storage Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "40 kg / 88 lb",
+            "width": "259 mm / 10.2 in",
+            "depth": "482 mm / 19.0 in",
+            "height": "705 mm / 27.8 in"
+          },
+          "media": {
+            "hero_image": "Tidel-D3-SNF-StorageVault_STD_Dimensions.png",
             "gallery": [],
             "brochures": []
           }
