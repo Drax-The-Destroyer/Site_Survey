@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from utils.draft_state import has_meaningful_draft_data
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -96,6 +97,17 @@ class SurveyDatabase:
         # Use WAL mode for better concurrency
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
+
+    def _extract_summary_fields(self, data: Dict[str, Any]) -> Tuple[str, str, str, str]:
+        form_data = data.get("form_data")
+        if not isinstance(form_data, dict):
+            form_data = {}
+
+        make = str(data.get("make", "") or "")
+        model = str(data.get("model", "") or "")
+        store_name = str(data.get("store_name") or form_data.get("store_name") or "")
+        technician_name = str(data.get("technician_name") or form_data.get("technician_name") or "")
+        return make, model, store_name, technician_name
     
     def save_draft(self, survey_id: str, data: Dict[str, Any]) -> bool:
         """
@@ -112,14 +124,15 @@ class SurveyDatabase:
             True if save succeeded, False otherwise
         """
         try:
+            if not has_meaningful_draft_data(data):
+                logger.info("Skipped blank draft save", extra={"survey_id": survey_id})
+                return False
+
             # Extract key fields for database columns
-            make = data.get("make", "")
-            model = data.get("model", "")
-            store_name = data.get("store_name", "")
-            technician_name = data.get("technician_name", "")
+            make, model, store_name, technician_name = self._extract_summary_fields(data)
             
             # Serialize full data as JSON
-            data_json = json.dumps(data, default=str)
+            data_json = json.dumps(data)
             
             # Get current timestamp
             now = datetime.now().isoformat()
@@ -211,15 +224,26 @@ class SurveyDatabase:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT id, store_name, make, model, updated_at, technician_name
+                SELECT id, store_name, make, model, updated_at, technician_name, data
                 FROM surveys
                 WHERE status = 'draft'
                 ORDER BY updated_at DESC
-                LIMIT ?
-            """, (limit,))
+            """)
             
-            results = cursor.fetchall()
+            raw_results = cursor.fetchall()
             conn.close()
+
+            results: List[Tuple] = []
+            for survey_id, store_name, make, model, updated_at, technician_name, data_json in raw_results:
+                try:
+                    payload = json.loads(data_json)
+                except Exception:
+                    payload = {}
+                if not has_meaningful_draft_data(payload):
+                    continue
+                results.append((survey_id, store_name, make, model, updated_at, technician_name))
+                if len(results) >= limit:
+                    break
             
             logger.info(f"Listed {len(results)} drafts")
             return results
@@ -323,18 +347,22 @@ class SurveyDatabase:
             cutoff = (datetime.now() - timedelta(hours=limit_hours)).isoformat()
             
             cursor.execute("""
-                SELECT id
+                SELECT id, data
                 FROM surveys
                 WHERE make = ? AND model = ? AND status = 'draft' AND updated_at > ?
                 ORDER BY updated_at DESC
-                LIMIT 1
             """, (make, model, cutoff))
             
-            result = cursor.fetchone()
+            rows = cursor.fetchall()
             conn.close()
-            
-            if result:
-                survey_id = result[0]
+
+            for survey_id, data_json in rows:
+                try:
+                    payload = json.loads(data_json)
+                except Exception:
+                    payload = {}
+                if not has_meaningful_draft_data(payload):
+                    continue
                 logger.info(f"Found recent draft", extra={
                     "survey_id": survey_id,
                     "make": make,

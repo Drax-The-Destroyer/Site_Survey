@@ -59,6 +59,16 @@ from data_loader import (
     get_data_version,
     load_media_index,   # NEW
 )
+from question_profiles import (
+    ensure_category_profile_data,
+    ensure_question_profile_schema,
+    get_default_profile_id,
+    get_profiles_for_category,
+    get_question_bank_sections,
+    normalize_category_key,
+    question_id,
+    slugify as profile_slugify,
+)
 
 
 # Simple password
@@ -200,12 +210,59 @@ def _as_str(x) -> str:
         return ""
 
 
+def _default_media() -> dict:
+    return {
+        "hero_image": "",
+        "gallery": [],
+        "brochures": [],
+    }
+
+
+def _normalize_media(media_in: Any) -> dict:
+    media = dict(media_in) if isinstance(media_in, dict) else {}
+    normalized = _default_media()
+    normalized["hero_image"] = _as_str(media.get("hero_image", ""))
+    normalized["gallery"] = [str(item).strip() for item in media.get("gallery", []) or [] if str(item).strip()]
+    normalized["brochures"] = [str(item).strip() for item in media.get("brochures", []) or [] if str(item).strip()]
+    return normalized
+
+
+def _normalize_dimensions(dims_in: Any) -> dict:
+    dims_in = dims_in if isinstance(dims_in, dict) else {}
+    return {
+        "weight": _as_str(dims_in.get("weight", "")),
+        "width": _as_str(dims_in.get("width", "")),
+        "depth": _as_str(dims_in.get("depth", "")),
+        "height": _as_str(dims_in.get("height", "")),
+    }
+
+
+def _merge_model_record(existing: Any, *, label: str, category: str, dimensions: dict) -> dict:
+    model_obj = dict(existing) if isinstance(existing, dict) else {}
+    model_obj["label"] = label
+    model_obj["category"] = category
+    model_obj["dimensions"] = _normalize_dimensions(dimensions)
+    model_obj["media"] = _normalize_media(model_obj.get("media"))
+    return model_obj
+
+
 def _coerce_models_map(models_in) -> dict:
     """
     Accepts list|dict|None and returns dict: {model_key: {label, category, dimensions{...}}}
     """
     if isinstance(models_in, dict):
-        return models_in
+        out = {}
+        for model_key, model_obj in models_in.items():
+            if not isinstance(model_obj, dict):
+                out[model_key] = _merge_model_record({}, label=_as_str(model_key), category="", dimensions={})
+                continue
+            out[model_key] = _merge_model_record(
+                model_obj,
+                label=_as_str(model_obj.get("label") or model_key),
+                category=_as_str(model_obj.get("category", "")),
+                dimensions=model_obj.get("dimensions"),
+            )
+        return out
     out = {}
     if isinstance(models_in, list):
         for item in models_in:
@@ -215,22 +272,15 @@ def _coerce_models_map(models_in) -> dict:
                 key = slugify(item.get("key") or label)
                 category = _as_str(item.get("category")
                                    or item.get("cat") or "")
-                dims_in = item.get("dimensions") or {}
-                if not isinstance(dims_in, dict):
-                    dims_in = {}
-                out[key] = {
-                    "label": label,
-                    "category": category,
-                    "dimensions": {
-                        "weight": _as_str(dims_in.get("weight", "")),
-                        "width":  _as_str(dims_in.get("width", "")),
-                        "depth":  _as_str(dims_in.get("depth", "")),
-                        "height": _as_str(dims_in.get("height", "")),
-                    },
-                }
+                out[key] = _merge_model_record(
+                    item,
+                    label=label,
+                    category=category,
+                    dimensions=item.get("dimensions"),
+                )
             elif isinstance(item, str):
                 key = slugify(item)
-                out[key] = {"label": item, "category": "", "dimensions": {}}
+                out[key] = _merge_model_record({}, label=item, category="", dimensions={})
     # anything else → empty
     return out
 
@@ -270,15 +320,13 @@ def _get_model_ref(catalog: dict, make_key: str, model_key: str) -> dict:
         .setdefault("makes", {})
         .setdefault(make_key, {"label": make_key, "models": {}})
         .setdefault("models", {})
-        .setdefault(model_key, {"label": model_key, "category": "", "dimensions": {}})
+        .setdefault(model_key, _merge_model_record({}, label=model_key, category="", dimensions={}))
     )
 
 
 def _ensure_media(model_obj: dict) -> dict:
-    media = model_obj.setdefault("media", {})
-    media.setdefault("hero_image", "")
-    media.setdefault("gallery", [])
-    media.setdefault("brochures", [])
+    media = _normalize_media(model_obj.get("media"))
+    model_obj["media"] = media
     return media
 
 
@@ -355,17 +403,15 @@ categories = _read_json(CATEGORIES_FP, DEFAULT_CATEGORIES)
 questions = _read_json(QUESTIONS_FP, DEFAULT_QUESTIONS)
 settings = _read_json(SETTINGS_FP, DEFAULT_SETTINGS)
 media_index = _read_json(MEDIA_INDEX_FP, DEFAULT_MEDIA_INDEX)
+questions = ensure_question_profile_schema(questions)
+lang_map = load_lang("en", get_data_version())
 
-# --- NEW: normalize catalog.makes shape (list → dict) ---
-original_makes = catalog.get("makes", {})
-coerced_makes = _coerce_makes_map(original_makes)
-if coerced_makes != original_makes:
-    catalog["makes"] = coerced_makes
-    catalog = rebuild_derived_catalog_structures(catalog, categories)
+# --- Normalize catalog shape and ensure every model has stable media structure ---
+catalog_before_normalize = json.dumps(catalog, sort_keys=True)
+catalog["makes"] = _coerce_makes_map(catalog.get("makes", {}))
+catalog = rebuild_derived_catalog_structures(catalog, categories)
+if json.dumps(catalog, sort_keys=True) != catalog_before_normalize:
     _write_json(CATALOG_FP, catalog)
-else:
-    # Defensive: ensure legacy fields exist even if shape was already correct
-    catalog = rebuild_derived_catalog_structures(catalog, categories)
 
 # -----------------------------
 col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
@@ -461,6 +507,112 @@ def editor_width_kwargs(width=None):
     if isinstance(width, (int, float)):
         return {"width": int(width)}
     return {}
+
+
+def persist_questions_config(updated_questions: Dict[str, Any]) -> None:
+    normalized = ensure_question_profile_schema(updated_questions)
+    _write_json(QUESTIONS_FP, normalized)
+    bump_data_version()
+
+
+def section_label(section: Dict[str, Any]) -> str:
+    title_key = str(section.get("title_key") or "").strip()
+    if title_key:
+        translated = str(lang_map.get(title_key) or "").strip()
+        if translated:
+            return translated
+    title = str(section.get("title") or "").strip()
+    if title:
+        return title
+    key = str(section.get("key") or "").strip()
+    return key.replace("_", " ").title() if key else "Section"
+
+
+def question_text(question: Dict[str, Any]) -> str:
+    label = str(question.get("label") or "").strip()
+    if label:
+        return label
+    label_key = str(question.get("label_key") or "").strip()
+    if label_key:
+        translated = str(lang_map.get(label_key) or "").strip()
+        if translated:
+            return translated
+    qid = question_id(question)
+    return qid or "Question"
+
+
+def question_bank_row(
+    question: Dict[str, Any],
+    profile_question_map: Dict[str, Dict[str, Any]],
+    default_order: int,
+) -> Dict[str, Any]:
+    qid = question_id(question)
+    profile_item = profile_question_map.get(qid, {})
+    include = qid in profile_question_map
+    effective_required = bool(profile_item.get("required", question.get("required", False))) if include else bool(question.get("required", False))
+    order_value = profile_item.get("order", default_order)
+    return {
+        "Include": include,
+        "Required": effective_required,
+        "Order": int(order_value),
+        "Question ID": qid,
+        "Question": question_text(question),
+        "Type": str(question.get("type", "text")),
+        "Default Required": bool(question.get("required", False)),
+        "Options (comma)": ", ".join(question.get("options", []))
+        if isinstance(question.get("options"), list)
+        else "",
+        "visible_if (JSON)": json.dumps(question.get("visible_if"))
+        if isinstance(question.get("visible_if"), (dict, list))
+        else "",
+    }
+
+
+def checkbox_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except Exception:
+        pass
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def build_profile_question_items(
+    rows: List[Dict[str, Any]],
+    bank_required_by_id: Dict[str, bool],
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    used_ids = set()
+    next_order = 1
+    for row in rows:
+        qid = str(row.get("Question ID", "")).strip()
+        include = checkbox_value(row.get("Include", False))
+        if not qid or not include or qid in used_ids:
+            continue
+        used_ids.add(qid)
+        try:
+            order_value = int(row.get("Order", next_order))
+        except Exception:
+            order_value = next_order
+        item: Dict[str, Any] = {
+            "question_id": qid,
+            "order": order_value,
+        }
+        effective_required = checkbox_value(row.get("Required", False))
+        default_required = bool(bank_required_by_id.get(qid, False))
+        if effective_required != default_required:
+            item["required"] = effective_required
+        items.append(item)
+        next_order += 1
+    return sorted(items, key=lambda item: (item.get("order", 0), item.get("question_id", "")))
 
 TAB = st.tabs([
     "Catalog",
@@ -576,16 +728,17 @@ with TAB[0]:
                         w_mm, w_in = parse_length(w_txt)
                         d_mm, d_in = parse_length(d_txt)
                         h_mm, h_in = parse_length(h_txt)
-                        models[mkey] = {
-                            "label": mdl_name.strip(),
-                            "category": mdl_category,
-                            "dimensions": {
+                        models[mkey] = _merge_model_record(
+                            models.get(mkey),
+                            label=mdl_name.strip(),
+                            category=mdl_category,
+                            dimensions={
                                 "weight": fmt_weight(kg, lb),
                                 "width": fmt_length(w_mm, w_in),
                                 "depth": fmt_length(d_mm, d_in),
                                 "height": fmt_length(h_mm, h_in),
                             },
-                        }
+                        )
                         catalog = rebuild_derived_catalog_structures(
                             catalog, categories)
                         _write_json(CATALOG_FP, catalog)
@@ -636,8 +789,12 @@ with TAB[0]:
                             if not key:
                                 key = slugify(label) or slugify(
                                     f"model-{time.time_ns()}")
-                            new_models[key] = {
-                                "label": label, "category": cat, "dimensions": dims}
+                            new_models[key] = _merge_model_record(
+                                models.get(key),
+                                label=label,
+                                category=cat,
+                                dimensions=dims,
+                            )
                         makes[sel_make_key]["models"] = new_models
                         catalog = rebuild_derived_catalog_structures(
                             catalog, categories)
@@ -738,24 +895,359 @@ with TAB[1]:
 # Question Sets Tab
 # -----------------------------
 with TAB[2]:
-    st.subheader("Question Sets Builder")
+    st.subheader("Survey Profiles")
     st.write(
         "Define fields by Category → Section or by Model → Section. "
         "Types: text, textarea, number, select, multiselect, radio, time, checkbox, file. "
         "Use visible_if to show conditionally."
     )
 
-    scope = st.radio(
-        "Scope",
-        ["By category", "By model"],
-        horizontal=True,
-        key="q_scope",
-    )
+    scope = "Profiles"
 
     # -------------------------
     # Scope: By category (existing behaviour)
     # -------------------------
-    if scope == "By category":
+    if scope == "Profiles":
+        cat_keys = list(categories.keys())
+        if not cat_keys:
+            st.info("Create at least one category first.")
+        else:
+            cat_sel = st.selectbox(
+                "Category",
+                options=cat_keys,
+                format_func=lambda k: categories[k]["label"],
+                key="profile_cat_sel",
+            )
+            cat_key = normalize_category_key(cat_sel)
+            questions = ensure_category_profile_data(questions, cat_key)
+
+            bank_sections = get_question_bank_sections(questions, cat_key)
+            profiles = get_profiles_for_category(questions, cat_key)
+            profile_ids = [profile["id"] for profile in profiles]
+            default_profile_id = get_default_profile_id(questions, cat_key)
+
+            if st.session_state.get("profile_template_sel") not in profile_ids:
+                st.session_state["profile_template_sel"] = (
+                    default_profile_id if default_profile_id in profile_ids else profile_ids[0]
+                )
+
+            profile_sel = st.selectbox(
+                "Profile",
+                options=profile_ids,
+                format_func=lambda pid: next(
+                    (profile["name"] for profile in profiles if profile["id"] == pid),
+                    pid,
+                ),
+                key="profile_template_sel",
+            )
+            selected_profile = next(
+                (profile for profile in profiles if profile["id"] == profile_sel),
+                profiles[0],
+            )
+
+            profile_token = f"{cat_key}:{profile_sel}"
+            if st.session_state.get("_admin_profile_state_token") != profile_token:
+                st.session_state["_admin_profile_name"] = selected_profile.get("name", "")
+                st.session_state["_admin_profile_default"] = profile_sel == default_profile_id
+                st.session_state["_admin_profile_state_token"] = profile_token
+
+            st.text_input("Profile name", key="_admin_profile_name")
+            st.checkbox(
+                "Use this as the default profile for new and legacy surveys",
+                key="_admin_profile_default",
+            )
+
+            act1, act2, act3 = st.columns(3)
+            with act1:
+                if wide_button("New Profile", type="primary"):
+                    new_name = st.session_state.get("_admin_profile_name", "").strip() or "New Profile"
+                    new_id = profile_slugify(new_name)
+                    if not new_id:
+                        st.error("Enter a profile name first.")
+                    elif new_id in {profile["id"] for profile in profiles}:
+                        st.error("A profile with that id already exists for this category.")
+                    else:
+                        questions["profiles"].setdefault(cat_key, []).append(
+                            {
+                                "id": new_id,
+                                "name": new_name,
+                                "category": cat_key,
+                                "questions": [],
+                                "custom_questions": [],
+                            }
+                        )
+                        questions["profile_defaults"].setdefault(cat_key, default_profile_id)
+                        persist_questions_config(questions)
+                        st.session_state["profile_template_sel"] = new_id
+                        st.rerun()
+            with act2:
+                if wide_button("Duplicate Profile"):
+                    copy_name = st.session_state.get("_admin_profile_name", "").strip() or f"{selected_profile.get('name', 'Profile')} Copy"
+                    copy_id = profile_slugify(copy_name)
+                    if not copy_id:
+                        st.error("Enter a profile name first.")
+                    elif copy_id in {profile["id"] for profile in profiles}:
+                        st.error("A profile with that id already exists for this category.")
+                    else:
+                        duplicated = json.loads(json.dumps(selected_profile))
+                        duplicated["id"] = copy_id
+                        duplicated["name"] = copy_name
+                        questions["profiles"].setdefault(cat_key, []).append(duplicated)
+                        persist_questions_config(questions)
+                        st.session_state["profile_template_sel"] = copy_id
+                        st.rerun()
+            with act3:
+                if wide_button("Delete Profile"):
+                    if len(profiles) <= 1:
+                        st.error("At least one profile must remain for each category.")
+                    else:
+                        questions["profiles"][cat_key] = [
+                            profile for profile in profiles if profile["id"] != profile_sel
+                        ]
+                        next_profile_id = questions["profiles"][cat_key][0]["id"]
+                        if questions.get("profile_defaults", {}).get(cat_key) == profile_sel:
+                            questions.setdefault("profile_defaults", {})[cat_key] = next_profile_id
+                        persist_questions_config(questions)
+                        st.session_state["profile_template_sel"] = next_profile_id
+                        st.rerun()
+
+            st.divider()
+            st.markdown("### Question Bank and Profile Coverage")
+            st.caption(
+                "Edit the reusable bank and choose which questions belong to this profile. "
+                "Only included questions render at runtime."
+            )
+
+            profile_question_map = {
+                item.get("question_id"): item
+                for item in selected_profile.get("questions", []) or []
+                if isinstance(item, dict) and item.get("question_id")
+            }
+            edited_sections: List[Tuple[Dict[str, Any], pd.DataFrame]] = []
+            type_options = [
+                "text",
+                "textarea",
+                "number",
+                "select",
+                "multiselect",
+                "radio",
+                "time",
+                "checkbox",
+                "file",
+            ]
+
+            for section in bank_sections:
+                section_rows = [
+                    question_bank_row(question, profile_question_map, default_order=index)
+                    for index, question in enumerate(section.get("questions", []) or [], start=1)
+                ]
+                if not section_rows:
+                    section_rows = [{
+                        "Include": False,
+                        "Required": False,
+                        "Order": 1,
+                        "Question ID": "",
+                        "Question": "",
+                        "Type": "text",
+                        "Default Required": False,
+                        "Options (comma)": "",
+                        "visible_if (JSON)": "",
+                    }]
+                with st.expander(section_label(section), expanded=True):
+                    edited_df = st.data_editor(
+                        pd.DataFrame(section_rows),
+                        **editor_width_kwargs(width="stretch"),
+                        hide_index=True,
+                        num_rows="dynamic",
+                        key=f"profile_editor_{cat_key}_{profile_sel}_{section.get('key')}",
+                        column_config={
+                            "Include": st.column_config.CheckboxColumn(),
+                            "Required": st.column_config.CheckboxColumn(),
+                            "Order": st.column_config.NumberColumn(min_value=1, step=1),
+                            "Type": st.column_config.SelectboxColumn(options=type_options),
+                            "Default Required": st.column_config.CheckboxColumn(),
+                        },
+                    )
+                    edited_sections.append((section, edited_df))
+
+            st.divider()
+            st.markdown("### Add Question to Category Bank")
+            with st.form("add_bank_question_form"):
+                section_options = [section.get("key") for section in bank_sections]
+                add_section_key = st.selectbox(
+                    "Section",
+                    options=section_options,
+                    format_func=lambda key: next(
+                        (section_label(section) for section in bank_sections if section.get("key") == key),
+                        key,
+                    ),
+                )
+                add_label = st.text_input("Question label", key="bank_q_label")
+                add_key = st.text_input("Question ID", value=profile_slugify(add_label), key="bank_q_key")
+                add_type = st.selectbox("Type", options=type_options, key="bank_q_type")
+                add_required = st.checkbox("Default required", value=False, key="bank_q_required")
+                add_col1, add_col2 = st.columns(2)
+                with add_col1:
+                    add_options = st.text_input("Options (comma-separated)", key="bank_q_options")
+                with add_col2:
+                    add_visible_if = st.text_input("visible_if (JSON)", key="bank_q_visible_if")
+                add_submit = st.form_submit_button("Add Question")
+
+            if add_submit:
+                target_section = next(
+                    (section for section in bank_sections if section.get("key") == add_section_key),
+                    None,
+                )
+                new_id = str(add_key or "").strip() or profile_slugify(add_label)
+                existing_ids = {
+                    question_id(question)
+                    for section in bank_sections
+                    for question in section.get("questions", []) or []
+                }
+                if not new_id:
+                    st.error("Question ID is required.")
+                elif new_id in existing_ids:
+                    st.error("Question ID already exists in this category bank.")
+                elif target_section is None:
+                    st.error("Select a valid section.")
+                else:
+                    new_question = {
+                        "id": new_id,
+                        "name": new_id,
+                        "label": add_label or new_id,
+                        "type": add_type,
+                        "required": add_required,
+                    }
+                    if add_options.strip():
+                        new_question["options"] = [
+                            option.strip()
+                            for option in add_options.split(",")
+                            if option.strip()
+                        ]
+                    if add_visible_if.strip():
+                        try:
+                            new_question["visible_if"] = json.loads(add_visible_if)
+                        except Exception as exc:
+                            st.error(f"Invalid JSON for visible_if: {exc}")
+                            st.stop()
+
+                    for section in questions["question_bank"][cat_key]["sections"]:
+                        if section.get("key") == add_section_key:
+                            section.setdefault("questions", []).append(new_question)
+                            break
+                    persist_questions_config(questions)
+                    st.success("Question added to the category bank.")
+                    st.rerun()
+
+            if wide_button("Save Profile", type="primary"):
+                updated_sections: List[Dict[str, Any]] = []
+                all_profile_rows: List[Dict[str, Any]] = []
+                bank_required_by_id: Dict[str, bool] = {}
+                section_errors: List[str] = []
+
+                for section, edited_df in edited_sections:
+                    updated_section = dict(section)
+                    updated_questions: List[Dict[str, Any]] = []
+                    existing_question_map = {
+                        question_id(question): question
+                        for question in section.get("questions", []) or []
+                        if isinstance(question, dict) and question_id(question)
+                    }
+                    seen_ids = set()
+
+                    for _, row in edited_df.iterrows():
+                        question_label = str(row.get("Question", "")).strip()
+                        qid = str(row.get("Question ID", "")).strip() or profile_slugify(question_label)
+                        if not qid:
+                            continue
+                        if qid in seen_ids:
+                            section_errors.append(f"Duplicate question id '{qid}' in section '{section_label(section)}'.")
+                            continue
+                        seen_ids.add(qid)
+
+                        existing_question = dict(existing_question_map.get(qid) or {})
+                        question = dict(existing_question)
+                        question["id"] = qid
+                        question["name"] = qid
+                        question.pop("key", None)
+                        question["type"] = str(row.get("Type", "text") or "text")
+                        question["required"] = checkbox_value(row.get("Default Required", False))
+
+                        existing_label = str(existing_question.get("label") or "").strip()
+                        existing_label_key = str(existing_question.get("label_key") or "").strip()
+                        existing_resolved_text = question_text(existing_question)
+                        if question_label:
+                            if existing_label_key and not existing_label and question_label == existing_resolved_text:
+                                question.pop("label", None)
+                                question["label_key"] = existing_label_key
+                            else:
+                                question["label"] = question_label
+                                if existing_label_key and question_label != existing_resolved_text:
+                                    question.pop("label_key", None)
+                        else:
+                            question["label"] = qid
+
+                        options_raw = str(row.get("Options (comma)", "") or "").strip()
+                        if options_raw:
+                            question["options"] = [
+                                option.strip()
+                                for option in options_raw.split(",")
+                                if option.strip()
+                            ]
+                        elif "options" in question:
+                            question.pop("options", None)
+
+                        visible_if_raw = str(row.get("visible_if (JSON)", "") or "").strip()
+                        if visible_if_raw:
+                            try:
+                                question["visible_if"] = json.loads(visible_if_raw)
+                            except Exception as exc:
+                                section_errors.append(
+                                    f"Invalid visible_if JSON for '{qid}' in section '{section_label(section)}': {exc}"
+                                )
+                                continue
+
+                        updated_questions.append(question)
+                        bank_required_by_id[qid] = bool(question["required"])
+                        all_profile_rows.append(
+                            {
+                                "Include": checkbox_value(row.get("Include", False)),
+                                "Required": checkbox_value(row.get("Required", False)),
+                                "Order": row.get("Order", len(all_profile_rows) + 1),
+                                "Question ID": qid,
+                            }
+                        )
+
+                    updated_section["questions"] = updated_questions
+                    updated_sections.append(updated_section)
+
+                if section_errors:
+                    for error in section_errors:
+                        st.error(error)
+                    st.stop()
+
+                updated_profile = json.loads(json.dumps(selected_profile))
+                updated_profile["name"] = st.session_state.get("_admin_profile_name", "").strip() or selected_profile.get("name", profile_sel)
+                updated_profile["category"] = cat_key
+                updated_profile["questions"] = build_profile_question_items(all_profile_rows, bank_required_by_id)
+                updated_profile.setdefault("custom_questions", [])
+
+                questions["question_bank"][cat_key] = {"sections": updated_sections}
+                questions["profiles"][cat_key] = [
+                    updated_profile if profile.get("id") == profile_sel else profile
+                    for profile in profiles
+                ]
+
+                if st.session_state.get("_admin_profile_default"):
+                    questions.setdefault("profile_defaults", {})[cat_key] = profile_sel
+                elif questions.get("profile_defaults", {}).get(cat_key) == profile_sel:
+                    questions["profile_defaults"][cat_key] = profile_sel
+
+                persist_questions_config(questions)
+                st.success("Profile and category question bank saved.")
+                st.rerun()
+
+    elif scope == "By category":
         cat_keys = list(categories.keys())
         if not cat_keys:
             st.info("Create at least one category first.")
@@ -1521,16 +2013,17 @@ with TAB[4]:
                 w_mm, w_in = parse_length(str(r.get(f_width, "")))
                 d_mm, d_in = parse_length(str(r.get(f_depth, "")))
                 h_mm, h_in = parse_length(str(r.get(f_height, "")))
-                mm[mdlk] = {
-                    "label": model,
-                    "category": cat if cat in categories else "smart_safe",
-                    "dimensions": {
+                mm[mdlk] = _merge_model_record(
+                    target,
+                    label=model,
+                    category=cat if cat in categories else "smart_safe",
+                    dimensions={
                         "weight": fmt_weight(kg, lb),
                         "width": fmt_length(w_mm, w_in),
                         "depth": fmt_length(d_mm, d_in),
                         "height": fmt_length(h_mm, h_in),
                     },
-                }
+                )
                 imp_count += 1
 
             catalog = rebuild_derived_catalog_structures(catalog, categories)
@@ -1657,7 +2150,14 @@ with TAB[6]:
                     errs.append(
                         f"Model {mv.get('label')}/{mdlv.get('label')} has missing category '{cat}'.")
         # 2) Questions should reference valid cats/sections (ignore meta keys)
-        QUESTIONS_META_KEYS = {"base_sections", "category_packs", "overrides"}
+        QUESTIONS_META_KEYS = {
+            "base_sections",
+            "category_packs",
+            "overrides",
+            "question_bank",
+            "profiles",
+            "profile_defaults",
+        }
         for ck, secmap in (questions or {}).items():
             if ck in QUESTIONS_META_KEYS:
                 continue

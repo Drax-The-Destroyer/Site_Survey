@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Set, Iterable
 import streamlit as st
 
 from utils.logger import setup_logger
+from question_profiles import ensure_question_profile_schema, question_id
 
 logger = setup_logger(__name__)
 
@@ -95,8 +96,12 @@ def _read_json(rel_path: str) -> Any:
 
 def _validate_unique_field_names(section: Dict[str, Any], where: str) -> None:
     names: Set[str] = set()
-    for fld in section.get("fields", []):
-        nm = fld.get("name")
+    fields = section.get("fields")
+    if fields is None:
+        fields = section.get("questions", [])
+
+    for fld in fields or []:
+        nm = fld.get("name") or fld.get("id") or fld.get("key")
         if not nm:
             logger.error(f"Field without name in section '{section.get('key')}' ({where})")
             st.error(
@@ -135,6 +140,20 @@ def _collect_all_field_names(qdef: Dict[str, Any]) -> Set[str]:
             fld = ins.get("field")
             if isinstance(fld, dict) and fld.get("name"):
                 names.add(fld["name"])
+
+    for category in (qdef.get("question_bank") or {}).values():
+        sections = []
+        if isinstance(category, dict):
+            sections = category.get("sections", []) or []
+        elif isinstance(category, list):
+            sections = category
+        for sec in sections:
+            if not isinstance(sec, dict):
+                continue
+            for fld in sec.get("questions", []) or []:
+                qid = question_id(fld)
+                if qid:
+                    names.add(qid)
     return names
 
 
@@ -222,6 +241,87 @@ def _validate_visible_if_references(qdef: Dict[str, Any]) -> None:
                             f"section '{sec.get('key')}'."
                         )
                         raise ValueError("visible_if bad reference")
+
+    # Question bank
+    for cat, bank in (qdef.get("question_bank") or {}).items():
+        secs = bank.get("sections", []) if isinstance(bank, dict) else bank
+        if not isinstance(secs, list):
+            st.error(
+                f"questions.question_bank['{cat}'] must be a list or object with 'sections'."
+            )
+            raise ValueError("question_bank schema error")
+        for sec in secs:
+            if not isinstance(sec, dict):
+                st.error(
+                    f"questions.question_bank['{cat}'] entries must be objects."
+                )
+                raise ValueError("question_bank section not object")
+            for fld in sec.get("questions", []) or []:
+                cond = fld.get("visible_if")
+                for clause in _each_visible_clause(cond):
+                    ref = clause.get("field")
+                    if not ref:
+                        continue
+                    if ref not in known and ref not in virtuals:
+                        st.error(
+                            f"visible_if references unknown field '{ref}' in question bank "
+                            f"category '{cat}', section '{sec.get('key')}'."
+                        )
+                        raise ValueError("visible_if bad reference")
+
+
+def _validate_profiles(qdef: Dict[str, Any]) -> None:
+    bank_lookup: Dict[str, Set[str]] = {}
+    for cat, bank in (qdef.get("question_bank") or {}).items():
+        sections = bank.get("sections", []) if isinstance(bank, dict) else bank
+        bank_lookup[cat] = {
+            question_id(question)
+            for section in sections or []
+            if isinstance(section, dict)
+            for question in section.get("questions", []) or []
+            if isinstance(question, dict) and question_id(question)
+        }
+
+    defaults = qdef.get("profile_defaults", {}) or {}
+    profiles_by_cat = qdef.get("profiles", {}) or {}
+    for cat, profiles in profiles_by_cat.items():
+        if not isinstance(profiles, list):
+            st.error(f"questions.profiles['{cat}'] must be a list.")
+            raise ValueError("profiles schema error")
+
+        seen_ids: Set[str] = set()
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                st.error(f"questions.profiles['{cat}'] entries must be objects.")
+                raise ValueError("profiles entry error")
+
+            profile_id = str(profile.get("id") or "").strip()
+            if not profile_id:
+                st.error(f"questions.profiles['{cat}'] contains a profile without an id.")
+                raise ValueError("profile id missing")
+            if profile_id in seen_ids:
+                st.error(f"questions.profiles['{cat}'] has duplicate profile id '{profile_id}'.")
+                raise ValueError("duplicate profile id")
+            seen_ids.add(profile_id)
+
+            for question in profile.get("questions", []) or []:
+                if not isinstance(question, dict):
+                    st.error(f"Profile '{profile_id}' in '{cat}' has an invalid question entry.")
+                    raise ValueError("profile question entry error")
+                qid = str(question.get("question_id") or "").strip()
+                if not qid:
+                    st.error(f"Profile '{profile_id}' in '{cat}' has a question without question_id.")
+                    raise ValueError("profile question id missing")
+                if qid not in bank_lookup.get(cat, set()):
+                    st.error(
+                        f"Profile '{profile_id}' in '{cat}' references unknown question '{qid}'."
+                    )
+                    raise ValueError("profile question missing from bank")
+
+        default_id = str(defaults.get(cat) or "").strip()
+        if default_id and default_id not in seen_ids:
+            st.error(f"questions.profile_defaults['{cat}'] references missing profile '{default_id}'.")
+            raise ValueError("profile default missing")
 
 
 
@@ -336,7 +436,18 @@ def load_catalog(version: str) -> Dict[str, Any]:
                 st.error(f"Model '{make_key}/{model_key}' must be an object.")
                 continue
             model_obj.setdefault("label", model_key)
-            # Optional: validate expected keys like category, dimensions, media, etc.
+            model_obj.setdefault("dimensions", {})
+            media = model_obj.setdefault("media", {})
+            if not isinstance(media, dict):
+                media = {}
+                model_obj["media"] = media
+            media.setdefault("hero_image", "")
+            media.setdefault("gallery", [])
+            media.setdefault("brochures", [])
+            if not isinstance(media.get("gallery"), list):
+                media["gallery"] = []
+            if not isinstance(media.get("brochures"), list):
+                media["brochures"] = []
 
     return {"makes": makes}
 
@@ -349,6 +460,8 @@ def load_questions(version: str) -> Dict[str, Any]:
             "Questions JSON must contain 'base_sections', 'category_packs', and 'overrides'."
         )
         raise ValueError("Questions schema error")
+
+    qdef = ensure_question_profile_schema(qdef)
 
     # Validate base sections
     for sec in qdef.get("base_sections", []):
@@ -377,8 +490,25 @@ def load_questions(version: str) -> Dict[str, Any]:
                 raise ValueError("category_packs section not object")
             _validate_unique_field_names(sec, where=f"category_packs['{cat}']")
 
+    for cat, bank in (qdef.get("question_bank") or {}).items():
+        secs = bank.get("sections", []) if isinstance(bank, dict) else bank
+        if not isinstance(secs, list):
+            st.error(
+                f"questions.question_bank['{cat}'] must be a list (or object with 'sections'). "
+                f"Got {type(secs).__name__}."
+            )
+            raise ValueError("question_bank schema error")
+        for sec in secs:
+            if not isinstance(sec, dict):
+                st.error(
+                    f"questions.question_bank['{cat}'] entries must be section objects."
+                )
+                raise ValueError("question_bank section not object")
+            _validate_unique_field_names(sec, where=f"question_bank['{cat}']")
+
     _validate_visible_if_references(qdef)
     _validate_insert_afters(qdef)
+    _validate_profiles(qdef)
 
     return qdef
 

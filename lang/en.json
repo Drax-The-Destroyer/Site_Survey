@@ -58,7 +58,7 @@
   "field.other_floor_type": "Other floor type (if applicable)",
   "field.subfloor_type": "Subfloor type",
 
-  "field.water_distance": "Will the safe be installed 6 feet away from a water source?",
+  "field.water_distance": "Will the safe be installed within 6 feet of any water source?",
 
   "field.storage_to_install_distance": "How far is the safe stored from the installation location?",
   "field.storage_different_floor": "Is the safe stored on a different floor?",

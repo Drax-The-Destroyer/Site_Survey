@@ -79,6 +79,28 @@
           }
         }
       }
+    },
+    "cima": {
+      "label": "CIMA",
+      "models": {
+        "diamonte_ast9000_cds803": {
+          "label": "Diamonte AST9000/CDS803",
+          "category": "recycler",
+          "dimensions": {
+            "weight": "",
+            "width": "1516 mm / 59.7 in",
+            "depth": "1967 mm / 77.4 in",
+            "height": ""
+          },
+          "media": {
+            "hero_image": "AST9000_CDS803_topview.png",
+            "gallery": [
+              "cima_diamonte.png"
+            ],
+            "brochures": []
+          }
+        }
+      }
     }
   }
 }

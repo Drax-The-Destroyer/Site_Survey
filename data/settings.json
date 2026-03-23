@@ -2,9 +2,9 @@
   "branding": {
     "company_name": "CashTech Currency Products",
     "pdf_header": "Site Survey Report",
-    "pdf_footer": "Confidential"
+    "pdf_footer": "Confidential - Refactor"
   },
   "media": {
-    "hero_image": "cashtech_logo.png"
+    "hero_image": ""
   }
 }

@@ -208,7 +208,8 @@ def render_section(
     category: Optional[str] = None,
     make: Optional[str] = None,
     model: Optional[str] = None,
-    show_required_errors: bool = False
+    show_required_errors: bool = False,
+    visibility_state: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Render a section's fields with Streamlit widgets, updating the provided answers dict.
@@ -219,13 +220,14 @@ def render_section(
     - Displays a small red caption under required fields if show_required_errors=True and value is missing
     """
     fields = section.get("fields") or []
+    visible_state = dict(visibility_state) if isinstance(visibility_state, dict) else answers
     for field in fields:
         name = field.get("name")
         if not name:
             continue
 
         # visible_if evaluation
-        if not _is_visible(field, answers, category, make, model):
+        if not _is_visible(field, visible_state, category, make, model):
             continue
 
         ftype = field.get("type", "text")
@@ -330,6 +332,9 @@ def render_section(
             _init_field_state(field, answers)
             st.text_input(label_to_show, value=answers[name], key=key, help=help_text)
             answers[name] = st.session_state[key]
+
+        if isinstance(visible_state, dict):
+            visible_state[name] = answers.get(name)
 
         # Inline required error
         if show_required_errors and field.get("required"):
