@@ -13,7 +13,7 @@
             "height": "705 mm / 27.8 in"
           },
           "media": {
-            "hero_image": "Tidel-D3-SNF-NoStorageVault_STD_Dimensions.png",
+            "hero_image": "Series3_BC_1SNF_STD_WSV.png",
             "gallery": [],
             "brochures": []
           }
@@ -28,52 +28,127 @@
             "height": "457 mm / 18 in"
           },
           "media": {
-            "hero_image": "tidel_d4_snf_nostoragevault_std.jpg",
+            "hero_image": "Series4_BC_2BNF_STD.png",
             "gallery": [],
             "brochures": []
           }
         },
-        "tidel_series_4_standard_with_drop_vault": {
-          "label": "TiDel Series 4 Standard with Drop Vault",
+        "series4_bc_1bnf_std_lsdv": {
+          "label": "Shell - Series 4 STD With Drop Vault",
           "category": "smart_safe",
           "dimensions": {
             "weight": "68 kg / 149 lb",
-            "width": "311 mm / 12.2 in",
+            "width": "311 mm / 12.25 in",
             "depth": "584 mm / 23.0 in",
             "height": "781 mm / 30.75 in"
           },
           "media": {
-            "hero_image": "Tidel-S4-S4e-BNF_StorageVault_STD.jpg",
+            "hero_image": "Series4_BC_1BNF_STD_LSDV.jpg",
             "gallery": [],
             "brochures": []
           }
         },
-        "tidel_series_4_xl_with_drop_vault": {
-          "label": "TiDel Series 4 XL with Drop Vault",
-          "category": "smart_safe",
-          "dimensions": {
-            "weight": "79 kg / 174 lb",
-            "width": "311 mm / 12.2 in",
-            "depth": "724 mm / 28.5 in",
-            "height": "781 mm / 30.75 in"
-          },
-          "media": {
-            "hero_image": "Tidel-S4-S4e-BNF_StorageVault_XL.jpg",
-            "gallery": [],
-            "brochures": []
-          }
-        },
-        "tidel_series_3_snf_w_storage_vault": {
-          "label": "TiDel Series 3 SNF w Storage Vault",
+        "series3_snf_lsdv": {
+          "label": "Series 3 With Drop Vault",
           "category": "smart_safe",
           "dimensions": {
             "weight": "40 kg / 88 lb",
             "width": "259 mm / 10.2 in",
             "depth": "482 mm / 19.0 in",
-            "height": "705 mm / 27.8 in"
+            "height": "705 mm / 27.75 in"
           },
           "media": {
-            "hero_image": "Tidel-D3-SNF-StorageVault_STD_Dimensions.png",
+            "hero_image": "Series3_BC_1SNF_STD_LSDV.png",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series3_snf_xl_lsdv": {
+        "label": "Series 3 XL With Drop Vault",
+        "category": "smart_safe",
+        "dimensions": {
+          "weight": "65 kg / 145 lb",
+          "width": "259 mm / 10.2 in",
+          "depth": "714 mm / 28.13 in",
+          "height": "705 mm / 27.75 in"
+        },
+        "media": {
+          "hero_image": "Series3_BC_1BNF_XL_LSDV.png",
+          "gallery": [],
+          "brochures": []
+        }
+      },
+        "series4_2bnf_std": {
+          "label": "Series 4 STD No Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 149 lb",
+            "width": "311 mm / 12.25 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "457 mm / 18 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_STD.png",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series4_2bnf_std_ped": {
+          "label": "Series 4 STD With Pedestal",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "",
+            "width": "311 mm / 12.25 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "560 mm / 22 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_STD_PED.png",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series4_2bnf_std_lsdv": {
+          "label": "Series 4 STD With Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 149 lb",
+            "width": "311 mm / 12.25 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.75 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_STD_LSDV.jpg",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series4_2bnf_xl_lsdv": {
+        "label": "Series 4 XL With Drop Vault",
+        "category": "smart_safe",
+        "dimensions": {
+          "weight": "79 kg / 174 lb",
+          "width": "311 mm / 12.25 in",
+          "depth": "724 mm / 28.5 in",
+          "height": "781 mm / 30.75 in"
+        },
+        "media": {
+          "hero_image": "Series4_BC_2BNF_XL_LSDV.jpg",
+          "gallery": [],
+          "brochures": []
+        }
+      },
+        "series4_2bnf_std_lsdv_wtv": {
+          "label": "Series 4 STD With Drop Vault With Tube Vend",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "170 kg / 374 lb",
+            "width": "559 mm / 22.0 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.75 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_STD_LSDV_WTV-N.png",
             "gallery": [],
             "brochures": []
           }
