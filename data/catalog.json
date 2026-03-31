@@ -64,20 +64,20 @@
           }
         },
         "series3_snf_xl_lsdv": {
-        "label": "Series 3 XL With Drop Vault",
-        "category": "smart_safe",
-        "dimensions": {
-          "weight": "65 kg / 145 lb",
-          "width": "259 mm / 10.2 in",
-          "depth": "714 mm / 28.13 in",
-          "height": "705 mm / 27.75 in"
+          "label": "Series 3 XL With Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "65 kg / 145 lb",
+            "width": "259 mm / 10.2 in",
+            "depth": "714 mm / 28.13 in",
+            "height": "705 mm / 27.75 in"
+          },
+          "media": {
+            "hero_image": "Series3_BC_1BNF_XL_LSDV.png",
+            "gallery": [],
+            "brochures": []
+          }
         },
-        "media": {
-          "hero_image": "Series3_BC_1BNF_XL_LSDV.png",
-          "gallery": [],
-          "brochures": []
-        }
-      },
         "series4_2bnf_std": {
           "label": "Series 4 STD No Drop Vault",
           "category": "smart_safe",
@@ -124,20 +124,20 @@
           }
         },
         "series4_2bnf_xl_lsdv": {
-        "label": "Series 4 XL With Drop Vault",
-        "category": "smart_safe",
-        "dimensions": {
-          "weight": "79 kg / 174 lb",
-          "width": "311 mm / 12.25 in",
-          "depth": "724 mm / 28.5 in",
-          "height": "781 mm / 30.75 in"
+          "label": "Series 4 XL With Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "79 kg / 174 lb",
+            "width": "311 mm / 12.25 in",
+            "depth": "724 mm / 28.5 in",
+            "height": "781 mm / 30.75 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_XL_LSDV.jpg",
+            "gallery": [],
+            "brochures": []
+          }
         },
-        "media": {
-          "hero_image": "Series4_BC_2BNF_XL_LSDV.jpg",
-          "gallery": [],
-          "brochures": []
-        }
-      },
         "series4_2bnf_std_lsdv_wtv": {
           "label": "Series 4 STD With Drop Vault With Tube Vend",
           "category": "smart_safe",
@@ -171,6 +171,28 @@
             "hero_image": "AST9000_CDS803_topview.png",
             "gallery": [
               "cima_diamonte.png"
+            ],
+            "brochures": []
+          }
+        }
+      }
+    },
+    "paycomplete": {
+      "label": "PayComplete",
+      "models": {
+        "bbox": {
+          "label": "BBox",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "",
+            "width": "600 mm / 23.6 in",
+            "depth": "900 mm / 35.4 in",
+            "height": "750 mm / 29.5 in"
+          },
+          "media": {
+            "hero_image": "PayComplete_BBox_Dimentions.png",
+            "gallery": [
+              "PayComplete_BBox.png"
             ],
             "brochures": []
           }
