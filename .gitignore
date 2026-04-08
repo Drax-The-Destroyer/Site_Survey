@@ -23,3 +23,5 @@ pages/old/
 
 # macOS
 .DS_Store
+
+.venv-linux/
