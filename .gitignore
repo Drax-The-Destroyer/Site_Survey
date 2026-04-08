@@ -27,3 +27,6 @@ pages/old/
 .venv-linux/
 
 .venv-linux/
+
+data/surveys.db
+data/questions.json.bak*
