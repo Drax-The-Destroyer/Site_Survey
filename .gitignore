@@ -25,3 +25,5 @@ pages/old/
 .DS_Store
 
 .venv-linux/
+
+.venv-linux/
