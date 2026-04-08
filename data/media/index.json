@@ -1,89 +1,89 @@
 {
   "images": {
-    "AST9000_CDS803_topview.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\AST9000_CDS803_topview.png",
-      "ts": 1774024805.1550078
-    },
-    "ChatGPT Image Mar 27, 2026, 12_07_04 PM.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\ChatGPT Image Mar 27, 2026, 12_07_04 PM.png",
-      "ts": 1774634824.5259514
-    },
-    "kisan_k6.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\kisan_k6.png",
-      "ts": 1761834439.847817
-    },
-    "PayComplete_BBox.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\PayComplete_BBox.png",
-      "ts": 1774970165.8283916
-    },
-    "PayComplete_BBox_Dimentions.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\PayComplete_BBox_Dimentions.png",
-      "ts": 1774970544.4903977
-    },
-    "Series3_BC_1BNF_STD_LSDV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1BNF_STD_LSDV.png",
-      "ts": 1774629229.1202178
-    },
-    "Series3_BC_1BNF_XL_LSDV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1BNF_XL_LSDV.png",
-      "ts": 1774629595.063205
-    },
-    "Series3_BC_1BNF_XL_WSV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1BNF_XL_WSV.png",
-      "ts": 1763571639.4716647
-    },
-    "Series3_BC_1SNF_STD_LSDV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1SNF_STD_LSDV.png",
-      "ts": 1763999506.1967056
-    },
-    "Series3_BC_1SNF_STD_WSV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1SNF_STD_WSV.png",
-      "ts": 1763999467.026615
-    },
-    "Series3_BC_1SNF_XL_WSV.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series3_BC_1SNF_XL_WSV.png",
-      "ts": 1763999487.267556
-    },
-    "Series4_BC_1BNF_STD_LSDV.jpg": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_1BNF_STD_LSDV.jpg",
-      "ts": 1774887936.7625163
-    },
     "Series4_BC_2BNF_STD.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_STD.png",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_STD.png",
       "ts": 1763999523.63331
     },
     "Series4_BC_2BNF_STD_LSDV.jpg": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_STD_LSDV.jpg",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_STD_LSDV.jpg",
       "ts": 1766018511.0
     },
-    "Series4_BC_2BNF_STD_LSDV_WTV-N.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_STD_LSDV_WTV-N.png",
-      "ts": 1774636924.3409195
+    "Series3_BC_1BNF_XL_WSV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1BNF_XL_WSV.png",
+      "ts": 1763571639.4716647
     },
-    "Series4_BC_2BNF_STD_PED.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_STD_PED.png",
-      "ts": 1763569203.9423575
+    "Series3_BC_1SNF_STD_WSV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1SNF_STD_WSV.png",
+      "ts": 1763999467.026615
     },
     "Series4_BC_2BNF_XL.png": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_XL.png",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_XL.png",
       "ts": 1763999540.570328
     },
+    "Series4_BC_2BNF_STD_PED.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_STD_PED.png",
+      "ts": 1763569203.9423575
+    },
+    "Series3_BC_1BNF_STD_LSDV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1BNF_STD_LSDV.png",
+      "ts": 1774629229.1202178
+    },
+    "PayComplete_BBox_Dimentions.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/PayComplete_BBox_Dimentions.png",
+      "ts": 1774970544.4903977
+    },
+    "PayComplete_BBox.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/PayComplete_BBox.png",
+      "ts": 1774970165.8283916
+    },
+    "Series4_BC_1BNF_STD_LSDV.jpg": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_1BNF_STD_LSDV.jpg",
+      "ts": 1774887936.7625163
+    },
+    "Series4_BC_2BNF_STD_LSDV_WTV-N.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_STD_LSDV_WTV-N.png",
+      "ts": 1774636924.3409195
+    },
+    "Series3_BC_1SNF_XL_WSV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1SNF_XL_WSV.png",
+      "ts": 1763999487.267556
+    },
+    "kisan_k6.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/kisan_k6.png",
+      "ts": 1761834439.847817
+    },
+    "Series3_BC_1BNF_XL_LSDV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1BNF_XL_LSDV.png",
+      "ts": 1774629595.063205
+    },
+    "AST9000_CDS803_topview.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/AST9000_CDS803_topview.png",
+      "ts": 1774024805.1550078
+    },
+    "Series3_BC_1SNF_STD_LSDV.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series3_BC_1SNF_STD_LSDV.png",
+      "ts": 1763999506.1967056
+    },
+    "ChatGPT Image Mar 27, 2026, 12_07_04 PM.png": {
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/ChatGPT Image Mar 27, 2026, 12_07_04 PM.png",
+      "ts": 1774634824.5259514
+    },
     "Series4_BC_2BNF_XL_LSDV.jpg": {
-      "path": "C:\\Python Projects\\Site_Survey\\assets\\Series4_BC_2BNF_XL_LSDV.jpg",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/assets/Series4_BC_2BNF_XL_LSDV.jpg",
       "ts": 1766018558.0
     }
   },
   "brochures": {
     "newton3-catalogue.pdf": {
-      "path": "C:\\Python Projects\\Site_Survey\\data\\media\\newton3-catalogue.pdf",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/data/media/newton3-catalogue.pdf",
       "ts": 1761836553.6270213
     },
     "tidel-d3-family-brochure.pdf": {
-      "path": "C:\\Python Projects\\Site_Survey\\data\\media\\tidel-d3-family-brochure.pdf",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/data/media/tidel-d3-family-brochure.pdf",
       "ts": 1761841641.2630582
     },
     "tidel-d4.pdf": {
-      "path": "C:\\Python Projects\\Site_Survey\\data\\media\\tidel-d4.pdf",
+      "path": "/home/david/.openclaw/workspace/site-survey-tool/data/media/tidel-d4.pdf",
       "ts": 1762443787.6816936
     }
   }

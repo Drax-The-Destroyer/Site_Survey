@@ -27,6 +27,7 @@ from overrides import merge_overrides
 from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 from pdf_builder import build_survey_pdf
+from utils.emailer import send_survey_email
 from question_profiles import (
     always_included_sections,
     build_sections_for_profile,
@@ -36,6 +37,7 @@ from question_profiles import (
     normalize_category_key,
     section_field_names,
 )
+from questions import get_questions_for
 
 # Setup logger
 logger = setup_logger(__name__)
@@ -46,6 +48,13 @@ db = SurveyDatabase(Config.DATABASE_PATH)
 # ==================== Helper: Deserialize Draft Data ====================
 def deserialize_draft_data(data: Dict[str, Any]) -> Dict[str, Any]:
     return deserialize_draft_value(data)
+
+
+def _ensure_tech_id() -> None:
+    if st.session_state.get("tech_id"):
+        return
+    tech_param = str(st.query_params.get("tech") or "").strip()
+    st.session_state["tech_id"] = tech_param or str(uuid.uuid4())
 
 
 def _validate_session_state() -> None:
@@ -98,6 +107,7 @@ st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar
 
 # Load data-driven resources
 version = get_data_version()
+_ensure_tech_id()
 
 # Always rebuild media index so index.json matches assets/ + data/media
 media_index = load_media_index()
@@ -143,6 +153,85 @@ def _selected_model_context(source: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _merge_runtime_questions_into_sections(
+    sections: List[Dict[str, Any]],
+    *,
+    qdef: Dict[str, Any],
+    category_key: str,
+    make_key: Optional[str],
+    model_key: Optional[str],
+    customer_id: Optional[str],
+) -> List[Dict[str, Any]]:
+    merged_sections: List[Dict[str, Any]] = []
+    for section in sections or []:
+        section_key = str(section.get("key") or "").strip()
+        if not section_key:
+            merged_sections.append(section)
+            continue
+
+        extra_questions = get_questions_for(
+            qdef,
+            category_key=category_key,
+            section_name=section_key,
+            make_key=make_key,
+            model_key=model_key,
+            customer_id=customer_id,
+        )
+
+        if not extra_questions:
+            merged_sections.append(section)
+            continue
+
+        updated_section = dict(section)
+        existing_fields = list(updated_section.get("fields", []) or [])
+        existing_names = {
+            str(field.get("name") or field.get("id") or "").strip()
+            for field in existing_fields
+            if isinstance(field, dict)
+        }
+
+        appended_fields = []
+        for question in extra_questions:
+            if not isinstance(question, dict):
+                continue
+            field_name = str(question.get("name") or question.get("id") or question.get("key") or "").strip()
+            if not field_name or field_name in existing_names:
+                continue
+            field = dict(question)
+            field["name"] = field_name
+            field.pop("key", None)
+            appended_fields.append(field)
+            existing_names.add(field_name)
+
+        updated_section["fields"] = existing_fields + appended_fields
+        merged_sections.append(updated_section)
+
+    return merged_sections
+
+
+def _build_email_subject(
+    *,
+    answers: Dict[str, Any],
+    customer_name: Optional[str],
+    make: Optional[str],
+    model: Optional[str],
+) -> str:
+    site_name = (
+        customer_name
+        or str(answers.get("site_name") or "").strip()
+        or str(answers.get("store_name") or "").strip()
+        or str(answers.get("location_name") or "").strip()
+        or " ".join(part for part in [make, model] if part)
+        or "Unknown Site"
+    )
+    technician = (
+        str(answers.get("contact") or "").strip()
+        or str(answers.get("technician") or "").strip()
+        or "Unknown Technician"
+    )
+    return f"Site Survey - {site_name} - {technician}"
+
+
 def _sync_form_data_from_widget_state() -> None:
     if "form_data" not in st.session_state or not isinstance(st.session_state["form_data"], dict):
         st.session_state["form_data"] = {}
@@ -182,13 +271,15 @@ def _sync_form_data_from_widget_state() -> None:
 def build_current_draft_payload() -> Dict[str, Any]:
     _sync_form_data_from_widget_state()
     context = _selected_model_context(st.session_state)
-    return extract_safe_draft_payload(
+    payload = extract_safe_draft_payload(
         st.session_state,
         make=context["make_label"] or None,
         model=context["model_label"] or None,
         category=context["category"] or None,
         profile_id=st.session_state.get("profile_id"),
     )
+    payload["tech_id"] = st.session_state.get("tech_id", "")
+    return payload
 
 
 def _clear_form_widget_state() -> None:
@@ -262,6 +353,8 @@ def apply_draft_payload_to_session(
         st.session_state["model_sel"] = safe_payload["model_sel"]
     if safe_payload.get("profile_id"):
         st.session_state["profile_id"] = safe_payload["profile_id"]
+    if safe_payload.get("tech_id"):
+        st.session_state["tech_id"] = safe_payload["tech_id"]
 
     st.session_state["form_data"] = form_data
     st.session_state["uploaded_photos"] = list(form_data.get("photos", [])) if isinstance(form_data.get("photos"), list) else []
@@ -286,6 +379,17 @@ def _visibility_state_for_sections(
 # ==================== Sidebar: Draft Management & Export ====================
 with st.sidebar:
     st.title("📋 Survey Management")
+    st.caption(f"🔑 Session: {str(st.session_state.get('tech_id', ''))[:8]}")
+    tech_id_input = st.text_input("Your name / tech ID", value=st.session_state.get("tech_id", ""), key="tech_id_input")
+    if tech_id_input.strip() and tech_id_input.strip() != st.session_state.get("tech_id"):
+        st.session_state["tech_id"] = tech_id_input.strip()
+        if st.session_state.get("survey_id"):
+            db.save_draft(
+                st.session_state["survey_id"],
+                build_current_draft_payload(),
+                user_id=st.session_state.get("tech_id", ""),
+            )
+        st.rerun()
     
     # Initialize show_drafts flag if not present
     if "show_drafts" not in st.session_state:
@@ -295,7 +399,7 @@ with st.sidebar:
         st.session_state["show_drafts"] = not st.session_state["show_drafts"]
     
     if st.session_state.get("show_drafts"):
-        drafts = db.list_drafts(limit=20)
+        drafts = db.list_drafts(limit=20, user_id=st.session_state.get("tech_id", ""))
         
         if drafts:
             st.markdown("### Recent Drafts")
@@ -389,9 +493,19 @@ SETTINGS_FP = os.path.join("data", "settings.json")
 def load_settings():
     try:
         with open(SETTINGS_FP, "r", encoding="utf-8") as f:
-            return json.load(f)
+            settings = json.load(f)
+            if not isinstance(settings, dict):
+                settings = {}
     except:
-        return {"branding": {}, "media": {}}
+        settings = {}
+
+    settings.setdefault("branding", {})
+    settings.setdefault("media", {})
+    settings.setdefault("email", {})
+    settings["email"].setdefault("to", ["Projects@cashtechcurrency.com"])
+    settings["email"].setdefault("cc", ["David_duggan@cashtechcurrency.com"])
+    settings["email"].setdefault("subject", "Site Survey Submission")
+    return settings
 
 def _hero_path(filename: str | None):
     """
@@ -454,11 +568,48 @@ settings_logo_path = _hero_path(settings_logo)
 # - replace hardcoded "en" in load_lang("en", version)
 # - map lang_choice -> "en", "fr_qc", etc.
 
-# --- Equipment Selection (Make → Model; Category derived from model) ---
+
+def _apply_prefill_query_params() -> None:
+    if st.session_state.get("_params_applied"):
+        return
+
+    customer_param = str(st.query_params.get("customer") or "").strip()
+    make_param = str(st.query_params.get("make") or "").strip()
+    model_param = str(st.query_params.get("model") or "").strip()
+
+    if customer_param:
+        for customer in load_customers():
+            if str(customer.get("id") or "").strip() == customer_param:
+                st.session_state["customer_id"] = customer_param
+                make_key = find_make_key_by_label(customer.get("make"))
+                model_key = find_model_key_by_label(make_key, customer.get("model"))
+                if make_key:
+                    st.session_state["make_sel"] = make_key
+                if model_key:
+                    st.session_state["model_sel"] = model_key
+                st.session_state["_params_applied"] = True
+                return
+
+    if make_param and model_param:
+        make_key = find_make_key_by_label(make_param)
+        model_key = find_model_key_by_label(make_key, model_param)
+        st.session_state["customer_id"] = "__manual__"
+        if make_key:
+            st.session_state["make_sel"] = make_key
+        if model_key:
+            st.session_state["model_sel"] = model_key
+        st.session_state["_params_applied"] = True
+        return
+
+    st.session_state["_params_applied"] = True
+
+
+# --- Equipment Selection (Customer -> Make/Model; Category derived from model) ---
 st.subheader(f"1. {lang_map.get('section.site_info', 'Site Information')}")
 
 # New admin structure: catalog["makes"][make_key] -> {"label", "models": {...}}
 makes_map: Dict[str, Dict[str, Any]] = catalog.get("makes", {}) or {}
+CUSTOMERS_FP = os.path.join("data", "customers.json")
 
 
 def make_label(k: str) -> str:
@@ -469,23 +620,90 @@ def model_label(mk: str, mdk: str) -> str:
     return ((makes_map.get(mk) or {}).get("models", {}).get(mdk) or {}).get("label", mdk)
 
 
-# Make selector
-make_key = st.selectbox(
-    "Make",
-    options=list(makes_map.keys()),
-    format_func=lambda k: make_label(k),
-    key="make_sel",
-) if makes_map else None
+def load_customers() -> List[Dict[str, Any]]:
+    try:
+        with open(CUSTOMERS_FP, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        customers = payload.get("customers", [])
+        return customers if isinstance(customers, list) else []
+    except Exception:
+        return []
 
-# Model selector scoped to make
+
+def find_make_key_by_label(label: Optional[str]) -> Optional[str]:
+    if not label:
+        return None
+    wanted = str(label).strip().lower()
+    for mk in makes_map.keys():
+        if make_label(mk).strip().lower() == wanted:
+            return mk
+    return None
+
+
+def find_model_key_by_label(mk: Optional[str], label: Optional[str]) -> Optional[str]:
+    if not mk or not label:
+        return None
+    wanted = str(label).strip().lower()
+    for model_k in ((makes_map.get(mk) or {}).get("models", {}) or {}).keys():
+        if model_label(mk, model_k).strip().lower() == wanted:
+            return model_k
+    return None
+
+
+customers = load_customers()
+customer_options = ["__none__"] + [customer.get("id") for customer in customers if customer.get("id")] + ["__manual__"]
+customer_lookup = {customer.get("id"): customer for customer in customers if customer.get("id")}
+
+_apply_prefill_query_params()
+
+if st.session_state.get("customer_id") not in customer_options:
+    st.session_state["customer_id"] = "__none__"
+
+selected_customer_id = st.selectbox(
+    "Customer",
+    options=customer_options,
+    format_func=lambda cid: (
+        "— Select a customer —" if cid == "__none__"
+        else "Other / Manual Entry" if cid == "__manual__"
+        else (customer_lookup.get(cid) or {}).get("name", cid)
+    ),
+    key="customer_id",
+)
+
+selected_customer = customer_lookup.get(selected_customer_id) if selected_customer_id not in {"__none__", "__manual__"} else None
+manual_entry = selected_customer_id == "__manual__"
+
+resolved_make_key = None
+resolved_model_key = None
+
+if selected_customer:
+    resolved_make_key = find_make_key_by_label(selected_customer.get("make"))
+    resolved_model_key = find_model_key_by_label(resolved_make_key, selected_customer.get("model"))
+    st.session_state["make_sel"] = resolved_make_key
+    st.session_state["model_sel"] = resolved_model_key
+elif manual_entry:
+    # Make selector
+    resolved_make_key = st.selectbox(
+        "Make",
+        options=list(makes_map.keys()),
+        format_func=lambda k: make_label(k),
+        key="make_sel",
+    ) if makes_map else None
+
+    # Model selector scoped to make
+    models_map_for_make: Dict[str, Dict[str, Any]] = (
+        makes_map.get(resolved_make_key) or {}).get("models", {}) if resolved_make_key else {}
+    resolved_model_key = st.selectbox(
+        "Model",
+        options=list(models_map_for_make.keys()),
+        format_func=lambda k: model_label(resolved_make_key, k),
+        key="model_sel",
+    ) if models_map_for_make else None
+
+make_key = resolved_make_key
 models_map_for_make: Dict[str, Dict[str, Any]] = (
     makes_map.get(make_key) or {}).get("models", {}) if make_key else {}
-model_key = st.selectbox(
-    "Model",
-    options=list(models_map_for_make.keys()),
-    format_func=lambda k: model_label(make_key, k),
-    key="model_sel",
-) if models_map_for_make else None
+model_key = resolved_model_key
 
 # Pull selected model meta + derive category
 selected_model: Dict[str, Any] = (
@@ -497,9 +715,17 @@ make = make_label(make_key) if make_key else None
 model = model_label(make_key, model_key) if model_key else None
 model_meta: Dict[str, Any] = selected_model
 
+st.session_state["resolved_make"] = make
+st.session_state["resolved_model"] = model
+st.session_state["resolved_make_key"] = make_key
+st.session_state["resolved_model_key"] = model_key
+
 # Guard against None selections
 if not (make and model):
-    st.info("Select a Make, then Model. Category is derived automatically.")
+    if selected_customer_id == "__none__":
+        st.info("Select a customer, or choose Other / Manual Entry.")
+    else:
+        st.info("Select a Make, then Model. Category is derived automatically.")
     model_key = None
     model_meta = {}
 else:
@@ -510,7 +736,7 @@ else:
     # Check if survey_id exists, otherwise look for recent draft or create new
     if "survey_id" not in st.session_state:
         # Check for recent draft matching this make/model
-        recent_draft_id = db.find_recent_draft(make, model, limit_hours=24)
+        recent_draft_id = db.find_recent_draft(make, model, limit_hours=24, user_id=st.session_state.get("tech_id", ""))
         
         if recent_draft_id:
             # Offer to resume draft
@@ -547,18 +773,8 @@ if profile_options:
         st.session_state["profile_id"] = (
             default_profile if default_profile in available_profile_ids else available_profile_ids[0]
         )
-
-    profile_id = st.selectbox(
-        "Survey Profile",
-        options=available_profile_ids,
-        format_func=lambda pid: next(
-            (profile["name"] for profile in profile_options if profile["id"] == pid),
-            pid,
-        ),
-        key="profile_id",
-    )
+    profile_id = st.session_state["profile_id"]
     active_profile = get_profile_by_id(qdef, category_key, profile_id)
-    st.caption(f"Profile: {active_profile.get('name', profile_id)}")
 else:
     profile_id = None
     active_profile = {}
@@ -673,6 +889,14 @@ if image_path and os.path.exists(image_path):
 base_sections = always_included_sections(qdef)
 profile_sections, _ = build_sections_for_profile(qdef, category_key, profile_id)
 sections_composed = base_sections + profile_sections
+sections_composed = _merge_runtime_questions_into_sections(
+    sections_composed,
+    qdef=qdef,
+    category_key=category_key,
+    make_key=make_key,
+    model_key=model_key,
+    customer_id=st.session_state.get("customer_id") if st.session_state.get("customer_id") not in {None, "__none__", "__manual__"} else None,
+)
 
 # Merge overrides and apply to sections
 merged = merge_overrides(qdef, category=category, make=make, model=model)
@@ -715,7 +939,7 @@ def try_autosave():
         if not has_meaningful_draft_data(save_data):
             return
 
-        if db.save_draft(st.session_state["survey_id"], save_data):
+        if db.save_draft(st.session_state["survey_id"], save_data, user_id=st.session_state.get("tech_id", "")):
             st.session_state["last_autosave"] = current_time
             # Subtle success indicator (don't distract user)
             st.caption("💾 Draft saved")
@@ -1093,15 +1317,40 @@ if st.button("📄 Generate PDF"):
                 "pdf_filename": file_name
             })
         
-        st.success(
-            "PDF generated successfully. Please download it below and, once confirmed, email the PDF to your Area Manager."
+        email_settings = settings.get("email", {}) or {}
+        to_addresses = list(email_settings.get("to", []) or [])
+        cc_addresses = list(email_settings.get("cc", []) or [])
+        selected_customer_name = None
+        if st.session_state.get("customer_id") not in {None, "__none__", "__manual__"}:
+            for customer in load_customers():
+                if customer.get("id") == st.session_state.get("customer_id"):
+                    selected_customer_name = customer.get("name")
+                    break
+        subject = _build_email_subject(
+            answers=filtered_validate_state,
+            customer_name=selected_customer_name,
+            make=make,
+            model=model,
         )
-        st.download_button(
-            label="📄 Download PDF Report",
-            data=pdf_bytes,
-            file_name=file_name,
-            mime="application/pdf",
-        )
+
+        try:
+            send_survey_email(
+                pdf_bytes=pdf_bytes,
+                filename=file_name,
+                to_addresses=to_addresses,
+                cc_addresses=cc_addresses,
+                subject=subject,
+            )
+            st.success("Survey emailed to the projects team.")
+        except Exception as email_exc:
+            logger.error("Survey email failed", extra={"error": str(email_exc), "pdf_filename": file_name}, exc_info=True)
+            st.error("Email failed — please download and send manually.")
+            st.download_button(
+                label="📄 Download PDF Report",
+                data=pdf_bytes,
+                file_name=file_name,
+                mime="application/pdf",
+            )
     except Exception as e:
         logger.error("PDF generation failed", extra={"error": str(e), "make": make, "model": model}, exc_info=True)
         st.error(f"Failed to generate PDF: {str(e)}")

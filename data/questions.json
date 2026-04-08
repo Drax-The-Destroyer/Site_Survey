@@ -592,9 +592,2064 @@
           }
         ]
       }
+    },
+    "by_customer": {
+      "canna_cabana": {
+        "delivery_base": [
+          {
+            "id": "this_is_a_test_question_for_canna_cabana",
+            "name": "this_is_a_test_question_for_canna_cabana",
+            "label": "This is a test question for Canna Cabana",
+            "type": "radio",
+            "required": true,
+            "order": 1,
+            "options": [
+              "yes",
+              "no"
+            ]
+          }
+        ]
+      }
     }
   },
   "smart_safe": {
     "Delivery": []
+  },
+  "question_bank": {
+    "dispenser": {
+      "sections": [
+        {
+          "key": "delivery_base",
+          "title_key": "section.delivery",
+          "questions": [
+            {
+              "name": "days_prior",
+              "label_key": "field.days_prior",
+              "type": "text",
+              "id": "days_prior",
+              "required": false
+            },
+            {
+              "name": "storage_space",
+              "label_key": "field.storage_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "default": "",
+              "id": "storage_space",
+              "required": false
+            },
+            {
+              "name": "storage_space_where",
+              "label_key": "field.storage_space_where",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "storage_space",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "storage_space_where",
+              "required": false
+            },
+            {
+              "name": "delivery_hours",
+              "label_key": "field.delivery_hours",
+              "type": "text",
+              "id": "delivery_hours",
+              "required": false
+            },
+            {
+              "name": "delivery_location",
+              "label_key": "field.delivery_location",
+              "type": "multiselect",
+              "options": [
+                "Front",
+                "Back",
+                "Other"
+              ],
+              "id": "delivery_location",
+              "required": false
+            },
+            {
+              "name": "delivery_loc_other_desc",
+              "label_key": "field.delivery_loc_other_desc",
+              "type": "text",
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "delivery_location",
+                    "op": "contains",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "delivery_loc_other_desc",
+              "required": false
+            },
+            {
+              "name": "storage_floor_number",
+              "label_key": "field.storage_floor_number",
+              "type": "text",
+              "id": "storage_floor_number",
+              "required": false
+            },
+            {
+              "name": "storage_path_obstacles",
+              "label_key": "field.storage_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "storage_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "storage_path_stairs_count",
+              "label_key": "field.storage_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "storage_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "storage_path_stairs_count"
+            },
+            {
+              "name": "loading_dock",
+              "label_key": "field.loading_dock",
+              "type": "radio",
+              "options": [
+                "Has loading dock",
+                "No dock – lift gate required"
+              ],
+              "id": "loading_dock",
+              "required": false
+            },
+            {
+              "name": "delivery_floor_desc",
+              "label_key": "field.delivery_floor_desc",
+              "type": "textarea",
+              "id": "delivery_floor_desc",
+              "required": false
+            },
+            {
+              "name": "stairs_count",
+              "label_key": "field.stairs_count",
+              "type": "number",
+              "id": "stairs_count",
+              "required": false
+            },
+            {
+              "name": "delivery_weight_restrictions",
+              "label_key": "field.delivery_weight_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_weight_restrictions",
+              "required": false
+            },
+            {
+              "name": "delivery_method",
+              "label_key": "field.delivery_method",
+              "type": "multiselect",
+              "options": [
+                "Pallet Jack",
+                "Dolly",
+                "Hand Truck"
+              ],
+              "id": "delivery_method",
+              "required": false
+            },
+            {
+              "name": "min_door_width",
+              "label_key": "field.min_door_width",
+              "type": "text",
+              "id": "min_door_width",
+              "required": false
+            },
+            {
+              "name": "path_desc",
+              "label_key": "field.path_desc",
+              "type": "textarea",
+              "id": "path_desc",
+              "required": false
+            },
+            {
+              "name": "delivery_path_photos",
+              "label_key": "field.delivery_path_photos",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_path_photos",
+              "required": false
+            }
+          ]
+        },
+        {
+          "key": "installation_location",
+          "title_key": "section.installation_location",
+          "questions": [
+            {
+              "name": "storage_to_install_distance",
+              "label_key": "field.storage_to_install_distance",
+              "type": "text",
+              "id": "storage_to_install_distance",
+              "required": false
+            },
+            {
+              "name": "storage_different_floor",
+              "label_key": "field.storage_different_floor",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "storage_different_floor",
+              "required": false
+            },
+            {
+              "name": "install_path_obstacles",
+              "label_key": "field.install_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Steps",
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "install_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "install_path_stairs_count",
+              "label_key": "field.install_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "install_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "install_path_stairs_count"
+            },
+            {
+              "name": "install_move_methods",
+              "label_key": "field.install_move_methods",
+              "type": "multiselect",
+              "options": [
+                "Sliding",
+                "Pallet jack",
+                "Dolly",
+                "Hand truck"
+              ],
+              "id": "install_move_methods",
+              "required": false
+            },
+            {
+              "name": "door_size",
+              "label_key": "field.door_size",
+              "type": "text",
+              "id": "door_size",
+              "required": false
+            },
+            {
+              "name": "room_size",
+              "label_key": "field.room_size",
+              "type": "text",
+              "id": "room_size",
+              "required": false
+            },
+            {
+              "name": "water_distance",
+              "label_key": "field.water_distance",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "water_distance",
+              "required": false
+            },
+            {
+              "name": "install_near_heaters",
+              "label_key": "field.install_near_heaters",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "install_near_heaters",
+              "required": false
+            },
+            {
+              "name": "sufficient_space",
+              "label_key": "field.sufficient_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "sufficient_space",
+              "required": false
+            },
+            {
+              "name": "floor_type",
+              "label_key": "field.floor_type",
+              "type": "radio",
+              "options": [
+                "Wood",
+                "Ceramic tile",
+                "Linoleum",
+                "Carpet",
+                "Other"
+              ],
+              "id": "floor_type",
+              "required": false
+            },
+            {
+              "name": "other_floor_type",
+              "label_key": "field.other_floor_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "floor_type",
+                    "op": "eq",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "other_floor_type",
+              "required": false
+            },
+            {
+              "name": "subfloor_type",
+              "label_key": "field.subfloor_type",
+              "type": "radio",
+              "options": [
+                "Wood structure",
+                "Concrete"
+              ],
+              "id": "subfloor_type",
+              "required": false
+            },
+            {
+              "name": "drilling_restrictions",
+              "label_key": "field.drilling_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "drilling_restrictions",
+              "required": false
+            },
+            {
+              "name": "floor_scan",
+              "label_key": "field.floor_scan",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "floor_scan",
+              "required": false
+            },
+            {
+              "name": "drilling_before_open",
+              "label_key": "field.drilling_before_open",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "drilling_before_open",
+              "required": false
+            },
+            {
+              "name": "power",
+              "label_key": "field.power",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "power",
+              "required": false
+            },
+            {
+              "name": "network",
+              "label_key": "field.network",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "network",
+              "required": false
+            },
+            {
+              "name": "network_distance",
+              "label_key": "field.network_distance",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "network",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "network_distance",
+              "required": false
+            },
+            {
+              "name": "download_speed",
+              "label_key": "field.download_speed",
+              "type": "text",
+              "id": "download_speed",
+              "required": false
+            },
+            {
+              "name": "upload_speed",
+              "label_key": "field.upload_speed",
+              "type": "text",
+              "id": "upload_speed",
+              "required": false
+            },
+            {
+              "name": "other_safe",
+              "label_key": "field.other_safe",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "other_safe",
+              "required": false
+            },
+            {
+              "name": "safe_type",
+              "label_key": "field.safe_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "other_safe",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "safe_type",
+              "required": false
+            },
+            {
+              "name": "safe_to_remove",
+              "label_key": "field.safe_to_remove",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "safe_to_remove",
+              "required": false
+            },
+            {
+              "name": "install_notes",
+              "label_key": "field.install_notes",
+              "type": "textarea",
+              "id": "install_notes",
+              "required": false
+            },
+            {
+              "name": "technician_name",
+              "label_key": "field.technician_name",
+              "type": "text",
+              "required": true,
+              "id": "technician_name"
+            }
+          ]
+        }
+      ]
+    },
+    "recycler": {
+      "sections": [
+        {
+          "key": "delivery_base",
+          "title_key": "section.delivery",
+          "questions": [
+            {
+              "name": "days_prior",
+              "label_key": "field.days_prior",
+              "type": "text",
+              "id": "days_prior",
+              "required": false
+            },
+            {
+              "name": "storage_space",
+              "label_key": "field.storage_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "default": "",
+              "id": "storage_space",
+              "required": false
+            },
+            {
+              "name": "storage_space_where",
+              "label_key": "field.storage_space_where",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "storage_space",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "storage_space_where",
+              "required": false
+            },
+            {
+              "name": "delivery_hours",
+              "label_key": "field.delivery_hours",
+              "type": "text",
+              "id": "delivery_hours",
+              "required": false
+            },
+            {
+              "name": "delivery_location",
+              "label_key": "field.delivery_location",
+              "type": "multiselect",
+              "options": [
+                "Front",
+                "Back",
+                "Other"
+              ],
+              "id": "delivery_location",
+              "required": false
+            },
+            {
+              "name": "delivery_loc_other_desc",
+              "label_key": "field.delivery_loc_other_desc",
+              "type": "text",
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "delivery_location",
+                    "op": "contains",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "delivery_loc_other_desc",
+              "required": false
+            },
+            {
+              "name": "storage_floor_number",
+              "label_key": "field.storage_floor_number",
+              "type": "text",
+              "id": "storage_floor_number",
+              "required": false
+            },
+            {
+              "name": "storage_path_obstacles",
+              "label_key": "field.storage_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "storage_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "storage_path_stairs_count",
+              "label_key": "field.storage_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "storage_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "storage_path_stairs_count"
+            },
+            {
+              "name": "loading_dock",
+              "label_key": "field.loading_dock",
+              "type": "radio",
+              "options": [
+                "Has loading dock",
+                "No dock – lift gate required"
+              ],
+              "id": "loading_dock",
+              "required": false
+            },
+            {
+              "name": "delivery_floor_desc",
+              "label_key": "field.delivery_floor_desc",
+              "type": "textarea",
+              "id": "delivery_floor_desc",
+              "required": false
+            },
+            {
+              "name": "stairs_count",
+              "label_key": "field.stairs_count",
+              "type": "number",
+              "id": "stairs_count",
+              "required": false
+            },
+            {
+              "name": "delivery_weight_restrictions",
+              "label_key": "field.delivery_weight_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_weight_restrictions",
+              "required": false
+            },
+            {
+              "name": "delivery_method",
+              "label_key": "field.delivery_method",
+              "type": "multiselect",
+              "options": [
+                "Pallet Jack",
+                "Dolly",
+                "Hand Truck"
+              ],
+              "id": "delivery_method",
+              "required": false
+            },
+            {
+              "name": "min_door_width",
+              "label_key": "field.min_door_width",
+              "type": "text",
+              "id": "min_door_width",
+              "required": false
+            },
+            {
+              "name": "path_desc",
+              "label_key": "field.path_desc",
+              "type": "textarea",
+              "id": "path_desc",
+              "required": false
+            },
+            {
+              "name": "delivery_path_photos",
+              "label_key": "field.delivery_path_photos",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_path_photos",
+              "required": false
+            }
+          ]
+        },
+        {
+          "key": "installation_location",
+          "title_key": "section.installation_location",
+          "questions": [
+            {
+              "name": "storage_to_install_distance",
+              "label_key": "field.storage_to_install_distance",
+              "type": "text",
+              "id": "storage_to_install_distance",
+              "required": false
+            },
+            {
+              "name": "storage_different_floor",
+              "label_key": "field.storage_different_floor",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "storage_different_floor",
+              "required": false
+            },
+            {
+              "name": "install_path_obstacles",
+              "label_key": "field.install_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Steps",
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "install_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "install_path_stairs_count",
+              "label_key": "field.install_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "install_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "install_path_stairs_count"
+            },
+            {
+              "name": "install_move_methods",
+              "label_key": "field.install_move_methods",
+              "type": "multiselect",
+              "options": [
+                "Sliding",
+                "Pallet jack",
+                "Dolly",
+                "Hand truck"
+              ],
+              "id": "install_move_methods",
+              "required": false
+            },
+            {
+              "name": "door_size",
+              "label_key": "field.door_size",
+              "type": "text",
+              "id": "door_size",
+              "required": false
+            },
+            {
+              "name": "room_size",
+              "label_key": "field.room_size",
+              "type": "text",
+              "id": "room_size",
+              "required": false
+            },
+            {
+              "name": "water_distance",
+              "label_key": "field.water_distance",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "water_distance",
+              "required": false
+            },
+            {
+              "name": "install_near_heaters",
+              "label_key": "field.install_near_heaters",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "install_near_heaters",
+              "required": false
+            },
+            {
+              "name": "sufficient_space",
+              "label_key": "field.sufficient_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "sufficient_space",
+              "required": false
+            },
+            {
+              "name": "floor_type",
+              "label_key": "field.floor_type",
+              "type": "radio",
+              "options": [
+                "Wood",
+                "Ceramic tile",
+                "Linoleum",
+                "Carpet",
+                "Other"
+              ],
+              "id": "floor_type",
+              "required": false
+            },
+            {
+              "name": "other_floor_type",
+              "label_key": "field.other_floor_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "floor_type",
+                    "op": "eq",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "other_floor_type",
+              "required": false
+            },
+            {
+              "name": "subfloor_type",
+              "label_key": "field.subfloor_type",
+              "type": "radio",
+              "options": [
+                "Wood structure",
+                "Concrete"
+              ],
+              "id": "subfloor_type",
+              "required": false
+            },
+            {
+              "name": "drilling_restrictions",
+              "label_key": "field.drilling_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "drilling_restrictions",
+              "required": false
+            },
+            {
+              "name": "floor_scan",
+              "label_key": "field.floor_scan",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "floor_scan",
+              "required": false
+            },
+            {
+              "name": "drilling_before_open",
+              "label_key": "field.drilling_before_open",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "drilling_before_open",
+              "required": false
+            },
+            {
+              "name": "power",
+              "label_key": "field.power",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "power",
+              "required": false
+            },
+            {
+              "name": "network",
+              "label_key": "field.network",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "network",
+              "required": false
+            },
+            {
+              "name": "network_distance",
+              "label_key": "field.network_distance",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "network",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "network_distance",
+              "required": false
+            },
+            {
+              "name": "download_speed",
+              "label_key": "field.download_speed",
+              "type": "text",
+              "id": "download_speed",
+              "required": false
+            },
+            {
+              "name": "upload_speed",
+              "label_key": "field.upload_speed",
+              "type": "text",
+              "id": "upload_speed",
+              "required": false
+            },
+            {
+              "name": "other_safe",
+              "label_key": "field.other_safe",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "other_safe",
+              "required": false
+            },
+            {
+              "name": "safe_type",
+              "label_key": "field.safe_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "other_safe",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "safe_type",
+              "required": false
+            },
+            {
+              "name": "safe_to_remove",
+              "label_key": "field.safe_to_remove",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "safe_to_remove",
+              "required": false
+            },
+            {
+              "name": "install_notes",
+              "label_key": "field.install_notes",
+              "type": "textarea",
+              "id": "install_notes",
+              "required": false
+            },
+            {
+              "name": "technician_name",
+              "label_key": "field.technician_name",
+              "type": "text",
+              "required": true,
+              "id": "technician_name"
+            }
+          ]
+        },
+        {
+          "key": "power_network",
+          "title_key": "section.power_network",
+          "questions": [
+            {
+              "name": "has_ethernet",
+              "label_key": "field.has_ethernet",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "required": true,
+              "id": "has_ethernet"
+            },
+            {
+              "name": "ethernet_distance_m",
+              "label_key": "field.ethernet_distance_m",
+              "type": "number",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "has_ethernet",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "ethernet_distance_m",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    "smart_safe": {
+      "sections": [
+        {
+          "key": "delivery_base",
+          "title_key": "section.delivery",
+          "questions": [
+            {
+              "name": "days_prior",
+              "label_key": "field.days_prior",
+              "type": "text",
+              "id": "days_prior",
+              "required": false
+            },
+            {
+              "name": "storage_space",
+              "label_key": "field.storage_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "default": "",
+              "id": "storage_space",
+              "required": false
+            },
+            {
+              "name": "storage_space_where",
+              "label_key": "field.storage_space_where",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "storage_space",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "storage_space_where",
+              "required": false
+            },
+            {
+              "name": "delivery_hours",
+              "label_key": "field.delivery_hours",
+              "type": "text",
+              "id": "delivery_hours",
+              "required": false
+            },
+            {
+              "name": "delivery_location",
+              "label_key": "field.delivery_location",
+              "type": "multiselect",
+              "options": [
+                "Front",
+                "Back",
+                "Other"
+              ],
+              "id": "delivery_location",
+              "required": false
+            },
+            {
+              "name": "delivery_loc_other_desc",
+              "label_key": "field.delivery_loc_other_desc",
+              "type": "text",
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "delivery_location",
+                    "op": "contains",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "delivery_loc_other_desc",
+              "required": false
+            },
+            {
+              "name": "storage_floor_number",
+              "label_key": "field.storage_floor_number",
+              "type": "text",
+              "id": "storage_floor_number",
+              "required": false
+            },
+            {
+              "name": "storage_path_obstacles",
+              "label_key": "field.storage_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "storage_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "storage_path_stairs_count",
+              "label_key": "field.storage_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "storage_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "storage_path_stairs_count"
+            },
+            {
+              "name": "loading_dock",
+              "label_key": "field.loading_dock",
+              "type": "radio",
+              "options": [
+                "Has loading dock",
+                "No dock – lift gate required"
+              ],
+              "id": "loading_dock",
+              "required": false
+            },
+            {
+              "name": "delivery_floor_desc",
+              "label_key": "field.delivery_floor_desc",
+              "type": "textarea",
+              "id": "delivery_floor_desc",
+              "required": false
+            },
+            {
+              "name": "stairs_count",
+              "label_key": "field.stairs_count",
+              "type": "number",
+              "id": "stairs_count",
+              "required": false
+            },
+            {
+              "name": "delivery_weight_restrictions",
+              "label_key": "field.delivery_weight_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_weight_restrictions",
+              "required": false
+            },
+            {
+              "name": "delivery_method",
+              "label_key": "field.delivery_method",
+              "type": "multiselect",
+              "options": [
+                "Pallet Jack",
+                "Dolly",
+                "Hand Truck"
+              ],
+              "id": "delivery_method",
+              "required": false
+            },
+            {
+              "name": "min_door_width",
+              "label_key": "field.min_door_width",
+              "type": "text",
+              "id": "min_door_width",
+              "required": false
+            },
+            {
+              "name": "path_desc",
+              "label_key": "field.path_desc",
+              "type": "textarea",
+              "id": "path_desc",
+              "required": false
+            },
+            {
+              "name": "delivery_path_photos",
+              "label_key": "field.delivery_path_photos",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "delivery_path_photos",
+              "required": false
+            }
+          ],
+          "title": "Delivery"
+        },
+        {
+          "key": "installation_location",
+          "title_key": "section.installation_location",
+          "questions": [
+            {
+              "name": "storage_to_install_distance",
+              "label_key": "field.storage_to_install_distance",
+              "type": "text",
+              "id": "storage_to_install_distance",
+              "required": false
+            },
+            {
+              "name": "storage_different_floor",
+              "label_key": "field.storage_different_floor",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "storage_different_floor",
+              "required": false
+            },
+            {
+              "name": "install_path_obstacles",
+              "label_key": "field.install_path_obstacles",
+              "type": "multiselect",
+              "options": [
+                "Steps",
+                "Stairs",
+                "Ramps"
+              ],
+              "id": "install_path_obstacles",
+              "required": false
+            },
+            {
+              "name": "install_path_stairs_count",
+              "label_key": "field.install_path_stairs_count",
+              "type": "number",
+              "required": false,
+              "visible_if": {
+                "any": [
+                  {
+                    "field": "install_path_obstacles",
+                    "op": "contains",
+                    "value": "Stairs"
+                  }
+                ]
+              },
+              "id": "install_path_stairs_count"
+            },
+            {
+              "name": "install_move_methods",
+              "label_key": "field.install_move_methods",
+              "type": "multiselect",
+              "options": [
+                "Sliding",
+                "Pallet jack",
+                "Dolly",
+                "Hand truck"
+              ],
+              "id": "install_move_methods",
+              "required": false
+            },
+            {
+              "name": "door_size",
+              "label_key": "field.door_size",
+              "type": "text",
+              "id": "door_size",
+              "required": false
+            },
+            {
+              "name": "room_size",
+              "label_key": "field.room_size",
+              "type": "text",
+              "id": "room_size",
+              "required": false
+            },
+            {
+              "name": "water_distance",
+              "label_key": "field.water_distance",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "water_distance",
+              "required": false
+            },
+            {
+              "name": "install_near_heaters",
+              "label_key": "field.install_near_heaters",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "install_near_heaters",
+              "required": false
+            },
+            {
+              "name": "sufficient_space",
+              "label_key": "field.sufficient_space",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "sufficient_space",
+              "required": false
+            },
+            {
+              "name": "floor_type",
+              "label_key": "field.floor_type",
+              "type": "radio",
+              "options": [
+                "Wood",
+                "Ceramic tile",
+                "Linoleum",
+                "Carpet",
+                "Other"
+              ],
+              "id": "floor_type",
+              "required": false
+            },
+            {
+              "name": "other_floor_type",
+              "label_key": "field.other_floor_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "floor_type",
+                    "op": "eq",
+                    "value": "Other"
+                  }
+                ]
+              },
+              "id": "other_floor_type",
+              "required": false
+            },
+            {
+              "name": "subfloor_type",
+              "label_key": "field.subfloor_type",
+              "type": "radio",
+              "options": [
+                "Wood structure",
+                "Concrete"
+              ],
+              "id": "subfloor_type",
+              "required": false
+            },
+            {
+              "name": "drilling_restrictions",
+              "label_key": "field.drilling_restrictions",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "drilling_restrictions",
+              "required": false
+            },
+            {
+              "name": "floor_scan",
+              "label_key": "field.floor_scan",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "floor_scan",
+              "required": false
+            },
+            {
+              "name": "drilling_before_open",
+              "label_key": "field.drilling_before_open",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "drilling_before_open",
+              "required": false
+            },
+            {
+              "name": "power",
+              "label_key": "field.power",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "power",
+              "required": false
+            },
+            {
+              "name": "network",
+              "label_key": "field.network",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No",
+                "Unknown"
+              ],
+              "id": "network",
+              "required": false
+            },
+            {
+              "name": "network_distance",
+              "label_key": "field.network_distance",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "network",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "network_distance",
+              "required": false
+            },
+            {
+              "name": "download_speed",
+              "label_key": "field.download_speed",
+              "type": "text",
+              "id": "download_speed",
+              "required": false
+            },
+            {
+              "name": "upload_speed",
+              "label_key": "field.upload_speed",
+              "type": "text",
+              "id": "upload_speed",
+              "required": false
+            },
+            {
+              "name": "other_safe",
+              "label_key": "field.other_safe",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "other_safe",
+              "required": false
+            },
+            {
+              "name": "safe_type",
+              "label_key": "field.safe_type",
+              "type": "text",
+              "visible_if": {
+                "all": [
+                  {
+                    "field": "other_safe",
+                    "op": "eq",
+                    "value": "Yes"
+                  }
+                ]
+              },
+              "id": "safe_type",
+              "required": false
+            },
+            {
+              "name": "safe_to_remove",
+              "label_key": "field.safe_to_remove",
+              "type": "radio",
+              "options": [
+                "Yes",
+                "No"
+              ],
+              "id": "safe_to_remove",
+              "required": false
+            },
+            {
+              "name": "install_notes",
+              "label_key": "field.install_notes",
+              "type": "textarea",
+              "id": "install_notes",
+              "required": false
+            },
+            {
+              "name": "technician_name",
+              "label_key": "field.technician_name",
+              "type": "text",
+              "required": true,
+              "id": "technician_name"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "profiles": {
+    "dispenser": [
+      {
+        "id": "default",
+        "name": "Default",
+        "category": "dispenser",
+        "questions": [
+          {
+            "question_id": "days_prior",
+            "order": 1
+          },
+          {
+            "question_id": "storage_space",
+            "order": 2
+          },
+          {
+            "question_id": "storage_space_where",
+            "order": 3
+          },
+          {
+            "question_id": "delivery_hours",
+            "order": 4
+          },
+          {
+            "question_id": "delivery_location",
+            "order": 5
+          },
+          {
+            "question_id": "delivery_loc_other_desc",
+            "order": 6
+          },
+          {
+            "question_id": "storage_floor_number",
+            "order": 7
+          },
+          {
+            "question_id": "storage_path_obstacles",
+            "order": 8
+          },
+          {
+            "question_id": "storage_path_stairs_count",
+            "order": 9
+          },
+          {
+            "question_id": "loading_dock",
+            "order": 10
+          },
+          {
+            "question_id": "delivery_floor_desc",
+            "order": 11
+          },
+          {
+            "question_id": "stairs_count",
+            "order": 12
+          },
+          {
+            "question_id": "delivery_weight_restrictions",
+            "order": 13
+          },
+          {
+            "question_id": "delivery_method",
+            "order": 14
+          },
+          {
+            "question_id": "min_door_width",
+            "order": 15
+          },
+          {
+            "question_id": "path_desc",
+            "order": 16
+          },
+          {
+            "question_id": "delivery_path_photos",
+            "order": 17
+          },
+          {
+            "question_id": "storage_to_install_distance",
+            "order": 18
+          },
+          {
+            "question_id": "storage_different_floor",
+            "order": 19
+          },
+          {
+            "question_id": "install_path_obstacles",
+            "order": 20
+          },
+          {
+            "question_id": "install_path_stairs_count",
+            "order": 21
+          },
+          {
+            "question_id": "install_move_methods",
+            "order": 22
+          },
+          {
+            "question_id": "door_size",
+            "order": 23
+          },
+          {
+            "question_id": "room_size",
+            "order": 24
+          },
+          {
+            "question_id": "water_distance",
+            "order": 25
+          },
+          {
+            "question_id": "install_near_heaters",
+            "order": 26
+          },
+          {
+            "question_id": "sufficient_space",
+            "order": 27
+          },
+          {
+            "question_id": "floor_type",
+            "order": 28
+          },
+          {
+            "question_id": "other_floor_type",
+            "order": 29
+          },
+          {
+            "question_id": "subfloor_type",
+            "order": 30
+          },
+          {
+            "question_id": "drilling_restrictions",
+            "order": 31
+          },
+          {
+            "question_id": "floor_scan",
+            "order": 32
+          },
+          {
+            "question_id": "drilling_before_open",
+            "order": 33
+          },
+          {
+            "question_id": "power",
+            "order": 34
+          },
+          {
+            "question_id": "network",
+            "order": 35
+          },
+          {
+            "question_id": "network_distance",
+            "order": 36
+          },
+          {
+            "question_id": "download_speed",
+            "order": 37
+          },
+          {
+            "question_id": "upload_speed",
+            "order": 38
+          },
+          {
+            "question_id": "other_safe",
+            "order": 39
+          },
+          {
+            "question_id": "safe_type",
+            "order": 40
+          },
+          {
+            "question_id": "safe_to_remove",
+            "order": 41
+          },
+          {
+            "question_id": "install_notes",
+            "order": 42
+          },
+          {
+            "question_id": "technician_name",
+            "order": 43
+          }
+        ],
+        "custom_questions": []
+      }
+    ],
+    "recycler": [
+      {
+        "id": "default",
+        "name": "Default",
+        "category": "recycler",
+        "questions": [
+          {
+            "question_id": "days_prior",
+            "order": 1
+          },
+          {
+            "question_id": "storage_space",
+            "order": 2
+          },
+          {
+            "question_id": "storage_space_where",
+            "order": 3
+          },
+          {
+            "question_id": "delivery_hours",
+            "order": 4
+          },
+          {
+            "question_id": "delivery_location",
+            "order": 5
+          },
+          {
+            "question_id": "delivery_loc_other_desc",
+            "order": 6
+          },
+          {
+            "question_id": "storage_floor_number",
+            "order": 7
+          },
+          {
+            "question_id": "storage_path_obstacles",
+            "order": 8
+          },
+          {
+            "question_id": "storage_path_stairs_count",
+            "order": 9
+          },
+          {
+            "question_id": "loading_dock",
+            "order": 10
+          },
+          {
+            "question_id": "delivery_floor_desc",
+            "order": 11
+          },
+          {
+            "question_id": "stairs_count",
+            "order": 12
+          },
+          {
+            "question_id": "delivery_weight_restrictions",
+            "order": 13
+          },
+          {
+            "question_id": "delivery_method",
+            "order": 14
+          },
+          {
+            "question_id": "min_door_width",
+            "order": 15
+          },
+          {
+            "question_id": "path_desc",
+            "order": 16
+          },
+          {
+            "question_id": "delivery_path_photos",
+            "order": 17
+          },
+          {
+            "question_id": "storage_to_install_distance",
+            "order": 18
+          },
+          {
+            "question_id": "storage_different_floor",
+            "order": 19
+          },
+          {
+            "question_id": "install_path_obstacles",
+            "order": 20
+          },
+          {
+            "question_id": "install_path_stairs_count",
+            "order": 21
+          },
+          {
+            "question_id": "install_move_methods",
+            "order": 22
+          },
+          {
+            "question_id": "door_size",
+            "order": 23
+          },
+          {
+            "question_id": "room_size",
+            "order": 24
+          },
+          {
+            "question_id": "water_distance",
+            "order": 25
+          },
+          {
+            "question_id": "install_near_heaters",
+            "order": 26
+          },
+          {
+            "question_id": "sufficient_space",
+            "order": 27
+          },
+          {
+            "question_id": "floor_type",
+            "order": 28
+          },
+          {
+            "question_id": "other_floor_type",
+            "order": 29
+          },
+          {
+            "question_id": "subfloor_type",
+            "order": 30
+          },
+          {
+            "question_id": "drilling_restrictions",
+            "order": 31
+          },
+          {
+            "question_id": "floor_scan",
+            "order": 32
+          },
+          {
+            "question_id": "drilling_before_open",
+            "order": 33
+          },
+          {
+            "question_id": "power",
+            "order": 34
+          },
+          {
+            "question_id": "network",
+            "order": 35
+          },
+          {
+            "question_id": "network_distance",
+            "order": 36
+          },
+          {
+            "question_id": "download_speed",
+            "order": 37
+          },
+          {
+            "question_id": "upload_speed",
+            "order": 38
+          },
+          {
+            "question_id": "other_safe",
+            "order": 39
+          },
+          {
+            "question_id": "safe_type",
+            "order": 40
+          },
+          {
+            "question_id": "safe_to_remove",
+            "order": 41
+          },
+          {
+            "question_id": "install_notes",
+            "order": 42
+          },
+          {
+            "question_id": "technician_name",
+            "order": 43
+          },
+          {
+            "question_id": "has_ethernet",
+            "order": 44
+          },
+          {
+            "question_id": "ethernet_distance_m",
+            "order": 45
+          }
+        ],
+        "custom_questions": []
+      }
+    ],
+    "smart_safe": [
+      {
+        "id": "default",
+        "name": "Default",
+        "category": "smart_safe",
+        "questions": [
+          {
+            "question_id": "days_prior",
+            "order": 1
+          },
+          {
+            "question_id": "storage_space",
+            "order": 2
+          },
+          {
+            "question_id": "storage_space_where",
+            "order": 3
+          },
+          {
+            "question_id": "delivery_hours",
+            "order": 4
+          },
+          {
+            "question_id": "delivery_location",
+            "order": 5
+          },
+          {
+            "question_id": "delivery_loc_other_desc",
+            "order": 6
+          },
+          {
+            "question_id": "storage_floor_number",
+            "order": 7
+          },
+          {
+            "question_id": "storage_path_obstacles",
+            "order": 8
+          },
+          {
+            "question_id": "storage_path_stairs_count",
+            "order": 9
+          },
+          {
+            "question_id": "loading_dock",
+            "order": 10
+          },
+          {
+            "question_id": "delivery_floor_desc",
+            "order": 11
+          },
+          {
+            "question_id": "stairs_count",
+            "order": 12
+          },
+          {
+            "question_id": "delivery_weight_restrictions",
+            "order": 13
+          },
+          {
+            "question_id": "delivery_method",
+            "order": 14
+          },
+          {
+            "question_id": "min_door_width",
+            "order": 15
+          },
+          {
+            "question_id": "path_desc",
+            "order": 16
+          },
+          {
+            "question_id": "delivery_path_photos",
+            "order": 17
+          },
+          {
+            "question_id": "storage_to_install_distance",
+            "order": 18
+          },
+          {
+            "question_id": "storage_different_floor",
+            "order": 19
+          },
+          {
+            "question_id": "install_path_obstacles",
+            "order": 20
+          },
+          {
+            "question_id": "install_path_stairs_count",
+            "order": 21
+          },
+          {
+            "question_id": "install_move_methods",
+            "order": 22
+          },
+          {
+            "question_id": "door_size",
+            "order": 23
+          },
+          {
+            "question_id": "room_size",
+            "order": 24
+          },
+          {
+            "question_id": "water_distance",
+            "order": 25
+          },
+          {
+            "question_id": "install_near_heaters",
+            "order": 26
+          },
+          {
+            "question_id": "sufficient_space",
+            "order": 27
+          },
+          {
+            "question_id": "floor_type",
+            "order": 28
+          },
+          {
+            "question_id": "other_floor_type",
+            "order": 29
+          },
+          {
+            "question_id": "subfloor_type",
+            "order": 30
+          },
+          {
+            "question_id": "drilling_restrictions",
+            "order": 31
+          },
+          {
+            "question_id": "floor_scan",
+            "order": 32
+          },
+          {
+            "question_id": "drilling_before_open",
+            "order": 33
+          },
+          {
+            "question_id": "power",
+            "order": 34
+          },
+          {
+            "question_id": "network",
+            "order": 35
+          },
+          {
+            "question_id": "network_distance",
+            "order": 36
+          },
+          {
+            "question_id": "download_speed",
+            "order": 37
+          },
+          {
+            "question_id": "upload_speed",
+            "order": 38
+          },
+          {
+            "question_id": "other_safe",
+            "order": 39
+          },
+          {
+            "question_id": "safe_type",
+            "order": 40
+          },
+          {
+            "question_id": "safe_to_remove",
+            "order": 41
+          },
+          {
+            "question_id": "install_notes",
+            "order": 42
+          },
+          {
+            "question_id": "technician_name",
+            "order": 43
+          }
+        ],
+        "custom_questions": []
+      }
+    ]
+  },
+  "profile_defaults": {
+    "dispenser": "default",
+    "recycler": "default",
+    "smart_safe": "default"
   }
 }

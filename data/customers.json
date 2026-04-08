@@ -1,0 +1,16 @@
+{
+  "customers": [
+    {
+      "id": "canna_cabana",
+      "name": "Canna Cabana",
+      "make": "TiDel",
+      "model": "Canna Cabana - TiDel D3 SNF STD w/o Storage Vault"
+    },
+    {
+      "id": "chipotle_mexican_grill",
+      "name": "Chipotle Mexican Grill",
+      "make": "TiDel",
+      "model": "Chipotle Mexican Grill - TiDel D4 SNF STD"
+    }
+  ]
+}

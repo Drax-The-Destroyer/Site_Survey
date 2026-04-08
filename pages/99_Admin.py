@@ -50,7 +50,10 @@ from typing import Dict, List, Any, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
+import qrcode
 from app.ui import wide_button
+from utils.database import SurveyDatabase
+from config import Config
 
 from data_loader import (
     load_catalog,
@@ -614,6 +617,82 @@ def build_profile_question_items(
         next_order += 1
     return sorted(items, key=lambda item: (item.get("order", 0), item.get("question_id", "")))
 
+
+def load_customers_config() -> List[Dict[str, Any]]:
+    payload = _read_json(os.path.join(DATA_DIR, "customers.json"), {"customers": []})
+    customers = payload.get("customers", []) if isinstance(payload, dict) else []
+    return customers if isinstance(customers, list) else []
+
+
+def find_make_key_by_label(label: Optional[str]) -> Optional[str]:
+    wanted = _as_str(label).lower()
+    if not wanted:
+        return None
+    for make_key, make_obj in (catalog.get("makes", {}) or {}).items():
+        if _as_str((make_obj or {}).get("label", make_key)).lower() == wanted:
+            return make_key
+    return None
+
+
+def find_model_key_by_label(make_key: Optional[str], label: Optional[str]) -> Optional[str]:
+    wanted = _as_str(label).lower()
+    if not make_key or not wanted:
+        return None
+    models = ((catalog.get("makes", {}) or {}).get(make_key, {}) or {}).get("models", {}) or {}
+    for model_key, model_obj in models.items():
+        if _as_str((model_obj or {}).get("label", model_key)).lower() == wanted:
+            return model_key
+    return None
+
+
+def override_question_row(question: Dict[str, Any], default_order: int) -> Dict[str, Any]:
+    qid = question_id(question)
+    return {
+        "Include": True,
+        "Required": bool(question.get("required", False)),
+        "Order": int(question.get("order", default_order)),
+        "Question ID": qid,
+        "Question": question_text(question),
+        "Type": str(question.get("type", "text")),
+        "Default Required": bool(question.get("required", False)),
+        "Options (comma)": ", ".join(question.get("options", [])) if isinstance(question.get("options"), list) else "",
+        "visible_if (JSON)": json.dumps(question.get("visible_if")) if isinstance(question.get("visible_if"), (dict, list)) else "",
+    }
+
+
+def build_override_questions(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    used_ids = set()
+    next_order = 1
+    for row in rows:
+        question_label = str(row.get("Question", "") or "").strip()
+        qid = str(row.get("Question ID", "") or "").strip() or profile_slugify(question_label)
+        include = checkbox_value(row.get("Include", False))
+        if not qid or not include or qid in used_ids:
+            continue
+        used_ids.add(qid)
+        try:
+            order_value = int(row.get("Order", next_order))
+        except Exception:
+            order_value = next_order
+        question: Dict[str, Any] = {
+            "id": qid,
+            "name": qid,
+            "label": question_label or qid,
+            "type": str(row.get("Type", "text") or "text"),
+            "required": checkbox_value(row.get("Required", False)),
+            "order": order_value,
+        }
+        options_raw = str(row.get("Options (comma)", "") or "").strip()
+        if options_raw:
+            question["options"] = [option.strip() for option in options_raw.split(",") if option.strip()]
+        visible_if_raw = str(row.get("visible_if (JSON)", "") or "").strip()
+        if visible_if_raw:
+            question["visible_if"] = json.loads(visible_if_raw)
+        items.append(question)
+        next_order += 1
+    return sorted(items, key=lambda item: (item.get("order", 0), item.get("id", "")))
+
 TAB = st.tabs([
     "Catalog",
     "Categories & Sections",
@@ -621,6 +700,7 @@ TAB = st.tabs([
     "Media Library",
     "Imports",
     "Settings",
+    "Share Links",
     "Maintenance",
 ])
 
@@ -895,19 +975,23 @@ with TAB[1]:
 # Question Sets Tab
 # -----------------------------
 with TAB[2]:
-    st.subheader("Survey Profiles")
+    st.subheader("Question Sets")
     st.write(
-        "Define fields by Category → Section or by Model → Section. "
+        "Manage questions at the category default, make/model override, or customer override level. "
         "Types: text, textarea, number, select, multiselect, radio, time, checkbox, file. "
         "Use visible_if to show conditionally."
     )
 
-    scope = "Profiles"
+    scope = st.selectbox(
+        "Scope",
+        options=["Category Default", "By Make/Model", "By Customer"],
+        key="question_set_scope",
+    )
 
     # -------------------------
     # Scope: By category (existing behaviour)
     # -------------------------
-    if scope == "Profiles":
+    if scope == "Category Default":
         cat_keys = list(categories.keys())
         if not cat_keys:
             st.info("Create at least one category first.")
@@ -1247,81 +1331,197 @@ with TAB[2]:
                 st.success("Profile and category question bank saved.")
                 st.rerun()
 
-    elif scope == "By category":
-        cat_keys = list(categories.keys())
-        if not cat_keys:
-            st.info("Create at least one category first.")
+    elif scope in {"By Make/Model", "By Customer"}:
+        type_options = [
+            "text",
+            "textarea",
+            "number",
+            "select",
+            "multiselect",
+            "radio",
+            "time",
+            "checkbox",
+            "file",
+        ]
+
+        selected_override_key = None
+        selected_category_key = None
+        override_sections: Dict[str, List[Dict[str, Any]]] = {}
+
+        if scope == "By Make/Model":
+            make_keys = list((catalog.get("makes", {}) or {}).keys())
+            if not make_keys:
+                st.info("Create at least one make/model first.")
+                st.stop()
+            mm_col1, mm_col2 = st.columns(2)
+            with mm_col1:
+                make_key_sel = st.selectbox(
+                    "Make",
+                    options=make_keys,
+                    format_func=lambda k: ((catalog.get("makes", {}) or {}).get(k, {}) or {}).get("label", k),
+                    key="qs_make_sel",
+                )
+            model_options = list((((catalog.get("makes", {}) or {}).get(make_key_sel, {}) or {}).get("models", {}) or {}).keys())
+            with mm_col2:
+                model_key_sel = (
+                    st.selectbox(
+                        "Model",
+                        options=model_options,
+                        format_func=lambda k: (((catalog.get("makes", {}) or {}).get(make_key_sel, {}) or {}).get("models", {}) or {}).get(k, {}).get("label", k),
+                        key="qs_model_sel",
+                    )
+                    if model_options else None
+                )
+
+            if not model_key_sel:
+                st.info("Select a model to edit make/model overrides.")
+                st.stop()
+
+            selected_override_key = f"{make_key_sel}:{model_key_sel}"
+            selected_category_key = normalize_category_key(
+                (((catalog.get("makes", {}) or {}).get(make_key_sel, {}) or {}).get("models", {}) or {}).get(model_key_sel, {}).get("category", "")
+            )
+            override_sections = (((questions.setdefault("overrides", {}) or {}).setdefault("by_model", {}) or {}).get(selected_override_key, {}) or {})
+            st.caption(f"Editing override key: {selected_override_key}")
         else:
-            c1, c2 = st.columns(2)
-            with c1:
-                cat_sel = st.selectbox(
-                    "Category",
-                    options=cat_keys,
-                    format_func=lambda k: categories[k]["label"],
-                )
-            with c2:
-                sec_options = categories[cat_sel].get("sections", [])
-                sec_sel = st.selectbox("Section", options=sec_options)
+            customers = load_customers_config()
+            customer_ids = [customer.get("id") for customer in customers if customer.get("id")]
+            customer_lookup = {customer.get("id"): customer for customer in customers if customer.get("id")}
+            if not customer_ids:
+                st.info("No customers found in data/customers.json.")
+                st.stop()
+            customer_id = st.selectbox(
+                "Customer",
+                options=customer_ids,
+                format_func=lambda cid: (customer_lookup.get(cid) or {}).get("name", cid),
+                key="qs_customer_sel",
+            )
+            customer = customer_lookup.get(customer_id) or {}
+            make_key_sel = find_make_key_by_label(customer.get("make"))
+            model_key_sel = find_model_key_by_label(make_key_sel, customer.get("model"))
+            selected_override_key = customer_id
+            selected_category_key = normalize_category_key(
+                (((catalog.get("makes", {}) or {}).get(make_key_sel, {}) or {}).get("models", {}) or {}).get(model_key_sel, {}).get("category", "")
+            )
+            override_sections = (((questions.setdefault("overrides", {}) or {}).setdefault("by_customer", {}) or {}).get(customer_id, {}) or {})
+            st.caption(f"Editing customer override: {(customer.get('name') or customer_id)}")
 
-            q_list: List[Dict[str, Any]] = questions.setdefault(cat_sel, {}).setdefault(sec_sel, [])
+        if not selected_category_key:
+            st.warning("Unable to determine category for the selected scope.")
+            st.stop()
 
-            # New question form
-            with st.form("add_q_cat"):
-                q_label = st.text_input("Question label", key="c_q_label")
-                q_key = st.text_input("Key", value=slugify(q_label), key="c_q_key")
-                q_type = st.selectbox(
-                    "Type",
-                    options=[
-                        "text",
-                        "textarea",
-                        "number",
-                        "select",
-                        "multiselect",
-                        "radio",
-                        "time",
-                        "checkbox",
-                        "file",
-                    ],
-                    key="c_q_type",
+        bank_sections = get_question_bank_sections(questions, selected_category_key)
+        edited_sections: List[Tuple[Dict[str, Any], pd.DataFrame]] = []
+
+        for section in bank_sections:
+            section_key = section.get("key")
+            existing_questions = override_sections.get(section_key, []) or []
+            section_rows = [override_question_row(question, default_order=index) for index, question in enumerate(existing_questions, start=1)]
+            if not section_rows:
+                section_rows = [{
+                    "Include": False,
+                    "Required": False,
+                    "Order": 1,
+                    "Question ID": "",
+                    "Question": "",
+                    "Type": "text",
+                    "Default Required": False,
+                    "Options (comma)": "",
+                    "visible_if (JSON)": "",
+                }]
+            with st.expander(section_label(section), expanded=True):
+                edited_df = st.data_editor(
+                    pd.DataFrame(section_rows),
+                    **editor_width_kwargs(width="stretch"),
+                    hide_index=True,
+                    num_rows="dynamic",
+                    key=f"override_editor_{scope}_{selected_override_key}_{section_key}",
+                    column_config={
+                        "Include": st.column_config.CheckboxColumn(),
+                        "Required": st.column_config.CheckboxColumn(),
+                        "Order": st.column_config.NumberColumn(min_value=1, step=1),
+                        "Type": st.column_config.SelectboxColumn(options=type_options),
+                        "Default Required": st.column_config.CheckboxColumn(disabled=True),
+                    },
                 )
-                q_required = st.checkbox("Required", value=False, key="c_q_req")
-                colx, coly = st.columns(2)
-                with colx:
-                    q_options = st.text_input(
-                        "Options (comma-separated, for select/radio/multiselect)",
-                        key="c_q_opts",
-                    )
-                with coly:
-                    q_visible_if = st.text_input(
-                        'visible_if (JSON; e.g., {"field":"dock","equals":"Yes"})',
-                        key="c_q_vis",
-                    )
-                q_submit = st.form_submit_button("➕ Add Field", type="primary")
-            if q_submit:
-                if not q_key:
-                    st.warning("Key is required.")
-                elif any(q.get("key") == q_key for q in q_list):
-                    st.error("Key already exists in this section.")
-                else:
-                    new_q = {
-                        "key": q_key,
-                        "label": q_label or q_key,
-                        "type": q_type,
-                        "required": q_required,
-                    }
-                    if q_options.strip():
-                        new_q["options"] = [
-                            o.strip() for o in q_options.split(",") if o.strip()
-                        ]
-                    if q_visible_if.strip():
-                        try:
-                            new_q["visible_if"] = json.loads(q_visible_if)
-                        except Exception as e:
-                            st.error(f"Invalid JSON for visible_if: {e}")
-                    q_list.append(new_q)
-                    _write_json(QUESTIONS_FP, questions)
-                    bump_data_version()
-                    st.success("Field added.")
+                edited_sections.append((section, edited_df))
+
+        st.divider()
+        st.markdown("### Add Question to Override Set")
+        with st.form(f"add_override_question_form_{scope}"):
+            section_options = [section.get("key") for section in bank_sections]
+            add_section_key = st.selectbox(
+                "Section",
+                options=section_options,
+                format_func=lambda key: next((section_label(section) for section in bank_sections if section.get("key") == key), key),
+            )
+            add_label = st.text_input("Question label", key=f"override_q_label_{scope}")
+            add_key = st.text_input("Question ID", value=profile_slugify(add_label), key=f"override_q_key_{scope}")
+            add_type = st.selectbox("Type", options=type_options, key=f"override_q_type_{scope}")
+            add_required = st.checkbox("Required", value=False, key=f"override_q_required_{scope}")
+            add_col1, add_col2 = st.columns(2)
+            with add_col1:
+                add_options = st.text_input("Options (comma-separated)", key=f"override_q_options_{scope}")
+            with add_col2:
+                add_visible_if = st.text_input("visible_if (JSON)", key=f"override_q_visible_if_{scope}")
+            add_submit = st.form_submit_button("Add Question")
+
+        if add_submit:
+            new_id = str(add_key or "").strip() or profile_slugify(add_label)
+            if not new_id:
+                st.error("Question ID is required.")
+            else:
+                new_question = {
+                    "id": new_id,
+                    "name": new_id,
+                    "label": add_label or new_id,
+                    "type": add_type,
+                    "required": add_required,
+                }
+                if add_options.strip():
+                    new_question["options"] = [option.strip() for option in add_options.split(",") if option.strip()]
+                if add_visible_if.strip():
+                    try:
+                        new_question["visible_if"] = json.loads(add_visible_if)
+                    except Exception as exc:
+                        st.error(f"Invalid JSON for visible_if: {exc}")
+                        st.stop()
+
+                target_map = questions.setdefault("overrides", {}).setdefault("by_model" if scope == "By Make/Model" else "by_customer", {})
+                target_sections = target_map.setdefault(selected_override_key, {})
+                target_sections.setdefault(add_section_key, []).append(new_question)
+                persist_questions_config(questions)
+                st.success("Question added to override set.")
+                st.rerun()
+
+        if wide_button("Save Question Set", type="primary"):
+            updated_scope_sections: Dict[str, List[Dict[str, Any]]] = {}
+            section_errors: List[str] = []
+            for section, edited_df in edited_sections:
+                section_key = section.get("key")
+                rows = edited_df.to_dict("records")
+                try:
+                    built_questions = build_override_questions(rows)
+                except Exception as exc:
+                    section_errors.append(f"Invalid override data in section '{section_label(section)}': {exc}")
+                    continue
+                if built_questions:
+                    updated_scope_sections[section_key] = built_questions
+
+            if section_errors:
+                for error in section_errors:
+                    st.error(error)
+                st.stop()
+
+            scope_root_key = "by_model" if scope == "By Make/Model" else "by_customer"
+            target_root = questions.setdefault("overrides", {}).setdefault(scope_root_key, {})
+            if updated_scope_sections:
+                target_root[selected_override_key] = updated_scope_sections
+            else:
+                target_root.pop(selected_override_key, None)
+            persist_questions_config(questions)
+            st.success("Override question set saved.")
+            st.rerun()
 
             # Editor
             if q_list:
@@ -2067,6 +2267,12 @@ with TAB[5]:
 
     with st.form("settings_form"):
         c1, c2 = st.columns(2)
+
+        # Make sure these keys exist
+        s.setdefault("branding", {})
+        s.setdefault("media", {})
+        s.setdefault("email", {})
+
         with c1:
             s["branding"]["company_name"] = st.text_input(
                 "Company name", value=s.get("branding", {}).get("company_name", "")
@@ -2074,10 +2280,6 @@ with TAB[5]:
             s["branding"]["pdf_header"] = st.text_input(
                 "PDF Header", value=s.get("branding", {}).get("pdf_header", "")
             )
-        
-        # Make sure these keys exist
-        s.setdefault("branding", {})
-        s.setdefault("media", {})
 
         with c2:
             s["branding"]["pdf_footer"] = st.text_input(
@@ -2096,6 +2298,17 @@ with TAB[5]:
                 index=hero_index,
             )
 
+        st.markdown("### Email Settings")
+        to_default = "\n".join(s.get("email", {}).get("to", []) or [])
+        cc_default = "\n".join(s.get("email", {}).get("cc", []) or [])
+        subject_default = s.get("email", {}).get("subject", "") or ""
+
+        to_text = st.text_area("To addresses", value=to_default, help="One address per line")
+        cc_text = st.text_area("CC addresses", value=cc_default, help="One address per line")
+        s["email"]["subject"] = st.text_input("Subject line", value=subject_default)
+
+        s["email"]["to"] = [line.strip() for line in to_text.splitlines() if line.strip()]
+        s["email"]["cc"] = [line.strip() for line in cc_text.splitlines() if line.strip()]
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
 
@@ -2135,10 +2348,96 @@ def build_data_bundle_zip() -> bytes:
 
 
 # -----------------------------
-# Maintenance Tab
+# Share Links Tab
 # -----------------------------
 with TAB[6]:
+    st.subheader("Share Links")
+    st.write("Generate pre-filled survey links for a customer or a specific make/model.")
+
+    customers = load_customers_config()
+    customer_ids = [customer.get("id") for customer in customers if customer.get("id")]
+    customer_lookup = {customer.get("id"): customer for customer in customers if customer.get("id")}
+    makes_map = catalog.get("makes", {}) or {}
+
+    base_url = st.text_input(
+        "Base survey URL",
+        value="https://yourapp.streamlit.app/",
+        help="Used to generate the shareable link.",
+    ).strip()
+
+    link_mode = st.radio("Prefill type", ["Customer", "Make + Model"], horizontal=True)
+
+    generated_url = ""
+    if link_mode == "Customer":
+        if customer_ids:
+            customer_id = st.selectbox(
+                "Customer",
+                options=customer_ids,
+                format_func=lambda cid: (customer_lookup.get(cid) or {}).get("name", cid),
+                key="share_customer_id",
+            )
+            generated_url = f"{base_url}?customer={customer_id}"
+        else:
+            st.info("No customers found in data/customers.json.")
+    else:
+        make_keys = list(makes_map.keys())
+        if make_keys:
+            make_key = st.selectbox(
+                "Make",
+                options=make_keys,
+                format_func=lambda k: ((makes_map.get(k) or {}).get("label", k)),
+                key="share_make_key",
+            )
+            models_map = ((makes_map.get(make_key) or {}).get("models", {}) or {})
+            model_keys = list(models_map.keys())
+            model_key = st.selectbox(
+                "Model",
+                options=model_keys,
+                format_func=lambda k: ((models_map.get(k) or {}).get("label", k)),
+                key="share_model_key",
+            ) if model_keys else None
+            if model_key:
+                make_label_value = ((makes_map.get(make_key) or {}).get("label", make_key))
+                model_label_value = ((models_map.get(model_key) or {}).get("label", model_key))
+                generated_url = f"{base_url}?make={make_label_value}&model={model_label_value}"
+        else:
+            st.info("No makes/models found in the catalog.")
+
+    if generated_url:
+        st.markdown("### Generated URL")
+        st.code(generated_url, language="text")
+
+        qr = qrcode.make(generated_url)
+        qr_buf = io.BytesIO()
+        qr.save(qr_buf, format="PNG")
+        qr_buf.seek(0)
+        st.markdown("### QR Code")
+        st.image(qr_buf.getvalue(), width=220)
+
+# -----------------------------
+# Maintenance Tab
+# -----------------------------
+with TAB[7]:
     st.subheader("Maintenance")
+
+    st.markdown("### All Drafts")
+    all_drafts = SurveyDatabase(Config.DATABASE_PATH).list_all_drafts(limit=200)
+    if all_drafts:
+        draft_rows = [
+            {
+                "survey_id": survey_id,
+                "user_id": user_id,
+                "store_name": store_name,
+                "make": make,
+                "model": model,
+                "updated_at": updated_at,
+                "technician_name": technician_name,
+            }
+            for survey_id, user_id, store_name, make, model, updated_at, technician_name in all_drafts
+        ]
+        st.dataframe(pd.DataFrame(draft_rows), use_container_width=True)
+    else:
+        st.info("No drafts found.")
 
     if wide_button("🔎 Validate All", type="primary"):
         errs = []

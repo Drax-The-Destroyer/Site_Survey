@@ -32,19 +32,18 @@ def get_questions_for(
     section_name: str,
     make_key: Optional[str] = None,
     model_key: Optional[str] = None,
+    customer_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Return combined admin-defined questions for a category/section.
 
-    Category questions live at: questions[category_key][section_name]
-    Model-specific overrides live at:
-      questions["overrides"]["by_model"]["make:model"][section_name]
+    Merge order (lowest -> highest priority):
+      1. category defaults: questions[category_key][section_name]
+      2. model overrides: questions["overrides"]["by_model"]["make:model"][section_name]
+      3. customer overrides: questions["overrides"]["by_customer"][customer_id][section_name]
 
-    Category questions are returned first; model questions are appended.
-    If make_key/model_key are omitted or there are no overrides, this
-    falls back to just the category questions.
+    Later layers are appended on top of earlier ones.
     """
 
-    # Base category-level questions (if any)
     base = (
         (questions_data or {})
         .get(category_key, {})
@@ -52,9 +51,9 @@ def get_questions_for(
         or []
     )
 
-    extra: List[Dict[str, Any]] = []
+    model_extra: List[Dict[str, Any]] = []
+    customer_extra: List[Dict[str, Any]] = []
 
-    # Optional model-level overrides
     if make_key and model_key:
         overrides_root = (
             (questions_data or {})
@@ -63,13 +62,23 @@ def get_questions_for(
             or {}
         )
         mid = model_q_id(make_key, model_key)
-        extra = (
+        model_extra = (
             overrides_root.get(mid, {})
             .get(section_name, [])
             or []
         )
 
-    # Simple merge: category questions first, then model-specific.
-    # If we ever want true overrides-by-key, we can extend this with
-    # de-dupe logic based on each item's "key".
-    return list(base) + list(extra)
+    if customer_id:
+        customer_root = (
+            (questions_data or {})
+            .get("overrides", {})
+            .get("by_customer", {})
+            or {}
+        )
+        customer_extra = (
+            customer_root.get(customer_id, {})
+            .get(section_name, [])
+            or []
+        )
+
+    return list(base) + list(model_extra) + list(customer_extra)

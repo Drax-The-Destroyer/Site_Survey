@@ -53,6 +53,7 @@ class SurveyDatabase:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS surveys (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT DEFAULT '',
                     make TEXT,
                     model TEXT,
                     store_name TEXT,
@@ -65,6 +66,11 @@ class SurveyDatabase:
                     pdf_filename TEXT
                 )
             """)
+
+            try:
+                cursor.execute("ALTER TABLE surveys ADD COLUMN user_id TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
             
             # Create indexes for common queries
             cursor.execute("""
@@ -109,7 +115,7 @@ class SurveyDatabase:
         technician_name = str(data.get("technician_name") or form_data.get("technician_name") or "")
         return make, model, store_name, technician_name
     
-    def save_draft(self, survey_id: str, data: Dict[str, Any]) -> bool:
+    def save_draft(self, survey_id: str, data: Dict[str, Any], user_id: str = "") -> bool:
         """
         Save or update a survey draft.
         
@@ -152,9 +158,9 @@ class SurveyDatabase:
             # Use INSERT OR REPLACE for upsert behavior
             cursor.execute("""
                 INSERT OR REPLACE INTO surveys 
-                (id, make, model, store_name, technician_name, created_at, updated_at, data, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-            """, (survey_id, make, model, store_name, technician_name, created_at, now, data_json))
+                (id, user_id, make, model, store_name, technician_name, created_at, updated_at, data, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+            """, (survey_id, user_id or "", make, model, store_name, technician_name, created_at, now, data_json))
             
             conn.commit()
             conn.close()
@@ -209,7 +215,7 @@ class SurveyDatabase:
             }, exc_info=True)
             return None
     
-    def list_drafts(self, limit: int = 50) -> List[Tuple]:
+    def list_drafts(self, limit: int = 50, user_id: str = "") -> List[Tuple]:
         """
         List recent survey drafts.
         
@@ -224,17 +230,17 @@ class SurveyDatabase:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT id, store_name, make, model, updated_at, technician_name, data
+                SELECT id, user_id, store_name, make, model, updated_at, technician_name, data
                 FROM surveys
-                WHERE status = 'draft'
+                WHERE status = 'draft' AND user_id = ?
                 ORDER BY updated_at DESC
-            """)
+            """, (user_id or "",))
             
             raw_results = cursor.fetchall()
             conn.close()
 
             results: List[Tuple] = []
-            for survey_id, store_name, make, model, updated_at, technician_name, data_json in raw_results:
+            for survey_id, _user_id, store_name, make, model, updated_at, technician_name, data_json in raw_results:
                 try:
                     payload = json.loads(data_json)
                 except Exception:
@@ -324,7 +330,7 @@ class SurveyDatabase:
             }, exc_info=True)
             return False
     
-    def find_recent_draft(self, make: str, model: str, limit_hours: int = 24) -> Optional[str]:
+    def find_recent_draft(self, make: str, model: str, limit_hours: int = 24, user_id: str = "") -> Optional[str]:
         """
         Find the most recent draft for a given make/model combination.
         
@@ -349,9 +355,9 @@ class SurveyDatabase:
             cursor.execute("""
                 SELECT id, data
                 FROM surveys
-                WHERE make = ? AND model = ? AND status = 'draft' AND updated_at > ?
+                WHERE make = ? AND model = ? AND status = 'draft' AND updated_at > ? AND user_id = ?
                 ORDER BY updated_at DESC
-            """, (make, model, cutoff))
+            """, (make, model, cutoff, user_id or ""))
             
             rows = cursor.fetchall()
             conn.close()
@@ -379,3 +385,35 @@ class SurveyDatabase:
                 "error": str(e)
             }, exc_info=True)
             return None
+
+    def list_all_drafts(self, limit: int = 100) -> List[Tuple]:
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, user_id, store_name, make, model, updated_at, technician_name, data
+                FROM surveys
+                WHERE status = 'draft'
+                ORDER BY updated_at DESC
+            """)
+
+            raw_results = cursor.fetchall()
+            conn.close()
+
+            results: List[Tuple] = []
+            for survey_id, user_id, store_name, make, model, updated_at, technician_name, data_json in raw_results:
+                try:
+                    payload = json.loads(data_json)
+                except Exception:
+                    payload = {}
+                if not has_meaningful_draft_data(payload):
+                    continue
+                results.append((survey_id, user_id, store_name, make, model, updated_at, technician_name))
+                if len(results) >= limit:
+                    break
+
+            return results
+        except Exception as e:
+            logger.error("Failed to list all drafts", extra={"error": str(e)}, exc_info=True)
+            return []
