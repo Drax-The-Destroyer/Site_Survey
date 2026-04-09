@@ -63,6 +63,7 @@ from data_loader import (
     load_media_index,   # NEW
 )
 from question_profiles import (
+    build_sections_for_profile,
     ensure_category_profile_data,
     ensure_question_profile_schema,
     get_default_profile_id,
@@ -110,6 +111,7 @@ CATALOG_FP = os.path.join(DATA_DIR, "catalog.json")
 CATEGORIES_FP = os.path.join(DATA_DIR, "categories.json")
 QUESTIONS_FP = os.path.join(DATA_DIR, "questions.json")
 SETTINGS_FP = os.path.join(DATA_DIR, "settings.json")
+CUSTOMERS_FP = os.path.join(DATA_DIR, "customers.json")
 MEDIA_INDEX_FP = os.path.join(MEDIA_DIR, "index.json")
 VERSION_FP = os.path.join(DATA_DIR, "version.json")
 
@@ -207,6 +209,8 @@ def ensure_unique(seq: List[str]) -> Tuple[bool, Optional[str]]:
 
 
 def _as_str(x) -> str:
+    if x is None:
+        return ""
     try:
         return str(x).strip()
     except Exception:
@@ -619,9 +623,13 @@ def build_profile_question_items(
 
 
 def load_customers_config() -> List[Dict[str, Any]]:
-    payload = _read_json(os.path.join(DATA_DIR, "customers.json"), {"customers": []})
+    payload = _read_json(CUSTOMERS_FP, {"customers": []})
     customers = payload.get("customers", []) if isinstance(payload, dict) else []
     return customers if isinstance(customers, list) else []
+
+
+def save_customers_config(customers: List[Dict[str, Any]]) -> None:
+    _write_json(CUSTOMERS_FP, {"customers": customers})
 
 
 def find_make_key_by_label(label: Optional[str]) -> Optional[str]:
@@ -660,7 +668,62 @@ def override_question_row(question: Dict[str, Any], default_order: int) -> Dict[
     }
 
 
-def build_override_questions(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_override_editor_rows(
+    base_questions: List[Dict[str, Any]],
+    override_questions: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    override_map = {
+        question_id(question): dict(question)
+        for question in (override_questions or [])
+        if isinstance(question, dict) and question_id(question)
+    }
+
+    for default_order, base_question in enumerate(base_questions or [], start=1):
+        qid = question_id(base_question)
+        if not qid:
+            continue
+
+        override_question = override_map.pop(qid, None)
+        effective_question = dict(base_question)
+        include = True
+        if override_question:
+            include = checkbox_value(override_question.get("include", True))
+            for key, value in override_question.items():
+                if key == "include":
+                    continue
+                effective_question[key] = value
+
+        row = override_question_row(effective_question, default_order=default_order)
+        row["Include"] = include
+        row["Default Required"] = bool(base_question.get("required", False))
+        rows.append(row)
+
+    extra_questions = sorted(
+        (
+            question
+            for question in override_map.values()
+            if checkbox_value(question.get("include", True))
+        ),
+        key=lambda item: (
+            int(item.get("order", 10000)) if str(item.get("order", "")).strip() else 10000,
+            question_id(item),
+        ),
+    )
+    next_order = len(rows) + 1
+    for question in extra_questions:
+        rows.append(override_question_row(question, default_order=next_order))
+        next_order += 1
+
+    return rows
+
+
+def build_override_questions(
+    rows: List[Dict[str, Any]],
+    *,
+    base_question_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    base_order_by_id: Optional[Dict[str, int]] = None,
+) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     used_ids = set()
     next_order = 1
@@ -668,33 +731,92 @@ def build_override_questions(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         question_label = str(row.get("Question", "") or "").strip()
         qid = str(row.get("Question ID", "") or "").strip() or profile_slugify(question_label)
         include = checkbox_value(row.get("Include", False))
-        if not qid or not include or qid in used_ids:
+        if not qid or qid in used_ids:
             continue
         used_ids.add(qid)
         try:
             order_value = int(row.get("Order", next_order))
         except Exception:
             order_value = next_order
-        question: Dict[str, Any] = {
+        options_raw = str(row.get("Options (comma)", "") or "").strip()
+        visible_if_raw = str(row.get("visible_if (JSON)", "") or "").strip()
+        row_options = [option.strip() for option in options_raw.split(",") if option.strip()] if options_raw else []
+        row_visible_if = json.loads(visible_if_raw) if visible_if_raw else None
+        row_required = checkbox_value(row.get("Required", False))
+        row_type = str(row.get("Type", "text") or "text")
+
+        base_question = (base_question_map or {}).get(qid)
+        if base_question:
+            if not include:
+                items.append({"id": qid, "name": qid, "include": False})
+                next_order += 1
+                continue
+
+            question: Dict[str, Any] = {"id": qid, "name": qid}
+            changed = False
+            default_order = int((base_order_by_id or {}).get(qid, next_order))
+            if order_value != default_order:
+                question["order"] = order_value
+                changed = True
+
+            effective_label = question_label or qid
+            if effective_label != question_text(base_question):
+                question["label"] = effective_label
+                changed = True
+
+            if row_type != str(base_question.get("type", "text") or "text"):
+                question["type"] = row_type
+                changed = True
+
+            if row_required != bool(base_question.get("required", False)):
+                question["required"] = row_required
+                changed = True
+
+            base_options = (
+                [str(option).strip() for option in base_question.get("options", []) if str(option).strip()]
+                if isinstance(base_question.get("options"), list)
+                else []
+            )
+            if row_options != base_options:
+                question["options"] = row_options
+                changed = True
+
+            base_visible_if = base_question.get("visible_if") if isinstance(base_question.get("visible_if"), (dict, list)) else None
+            if visible_if_raw:
+                if row_visible_if != base_visible_if:
+                    question["visible_if"] = row_visible_if
+                    changed = True
+            elif base_visible_if is not None:
+                question["visible_if"] = None
+                changed = True
+
+            if changed:
+                items.append(question)
+            next_order += 1
+            continue
+
+        if not include:
+            continue
+
+        question = {
             "id": qid,
             "name": qid,
             "label": question_label or qid,
-            "type": str(row.get("Type", "text") or "text"),
-            "required": checkbox_value(row.get("Required", False)),
+            "type": row_type,
+            "required": row_required,
             "order": order_value,
         }
-        options_raw = str(row.get("Options (comma)", "") or "").strip()
-        if options_raw:
-            question["options"] = [option.strip() for option in options_raw.split(",") if option.strip()]
-        visible_if_raw = str(row.get("visible_if (JSON)", "") or "").strip()
+        if row_options:
+            question["options"] = row_options
         if visible_if_raw:
-            question["visible_if"] = json.loads(visible_if_raw)
+            question["visible_if"] = row_visible_if
         items.append(question)
         next_order += 1
     return sorted(items, key=lambda item: (item.get("order", 0), item.get("id", "")))
 
 TAB = st.tabs([
     "Catalog",
+    "Customers",
     "Categories & Sections",
     "Question Sets",
     "Media Library",
@@ -912,9 +1034,244 @@ with TAB[0]:
                         st.rerun()
 
 # -----------------------------
-# Categories & Sections Tab
+# Customers Tab
 # -----------------------------
 with TAB[1]:
+    st.subheader("Customers")
+    st.write(
+        "Manage named customer presets used by the survey selector, share links, and customer-specific question overrides."
+    )
+
+    customers = load_customers_config()
+    customer_ids = [_as_str(customer.get("id")) for customer in customers if _as_str(customer.get("id"))]
+    customer_lookup = {
+        _as_str(customer.get("id")): customer
+        for customer in customers
+        if _as_str(customer.get("id"))
+    }
+    customer_override_root = (
+        ((questions.get("overrides", {}) or {}).get("by_customer", {}) or {})
+        if isinstance(questions, dict)
+        else {}
+    )
+
+    make_keys = list((catalog.get("makes", {}) or {}).keys())
+    make_options = ["__none__"] + make_keys
+
+    def _default_model_key(make_key: str) -> str:
+        if not make_key or make_key == "__none__":
+            return "__none__"
+        model_keys = list((((catalog.get("makes", {}) or {}).get(make_key, {}) or {}).get("models", {}) or {}).keys())
+        return model_keys[0] if model_keys else "__none__"
+
+    def _generate_customer_id(name: str, existing_ids: List[str]) -> str:
+        base = slugify(name)
+        if not base:
+            return ""
+        taken = {cid for cid in existing_ids if cid}
+        if base not in taken:
+            return base
+        suffix = 2
+        while f"{base}_{suffix}" in taken:
+            suffix += 1
+        return f"{base}_{suffix}"
+
+    customer_options = ["__new__"] + customer_ids
+    pending_customer_sel = st.session_state.pop("_admin_customer_pending_sel", None)
+    if pending_customer_sel in customer_options:
+        st.session_state["admin_customer_sel"] = pending_customer_sel
+    elif pending_customer_sel == "__new__":
+        st.session_state["admin_customer_sel"] = "__new__"
+    if st.session_state.get("admin_customer_sel") not in customer_options:
+        st.session_state["admin_customer_sel"] = customer_ids[0] if customer_ids else "__new__"
+
+    selected_customer_id = st.selectbox(
+        "Customer Record",
+        options=customer_options,
+        format_func=lambda cid: (
+            "Add New Customer" if cid == "__new__"
+            else (customer_lookup.get(cid) or {}).get("name", cid)
+        ),
+        key="admin_customer_sel",
+    )
+
+    selected_customer = customer_lookup.get(selected_customer_id) if selected_customer_id != "__new__" else None
+    customer_state_token = selected_customer_id or "__new__"
+    if st.session_state.get("_admin_customer_state_token") != customer_state_token:
+        st.session_state["_admin_customer_name"] = _as_str((selected_customer or {}).get("name"))
+
+        initial_make_key = find_make_key_by_label((selected_customer or {}).get("make"))
+        if selected_customer_id == "__new__":
+            initial_make_key = initial_make_key or (make_keys[0] if make_keys else "__none__")
+        st.session_state["_admin_customer_make_key"] = initial_make_key or "__none__"
+
+        initial_model_key = find_model_key_by_label(
+            st.session_state["_admin_customer_make_key"],
+            (selected_customer or {}).get("model"),
+        )
+        if selected_customer_id == "__new__":
+            initial_model_key = initial_model_key or _default_model_key(st.session_state["_admin_customer_make_key"])
+        st.session_state["_admin_customer_model_key"] = initial_model_key or "__none__"
+        st.session_state["_admin_customer_delete_confirm"] = False
+        st.session_state["_admin_customer_delete_overrides"] = False
+        st.session_state["_admin_customer_state_token"] = customer_state_token
+
+    left_col, right_col = st.columns([2, 1])
+    with left_col:
+        customer_name_value = _as_str(st.session_state.get("_admin_customer_name"))
+        generated_customer_id = (
+            selected_customer_id
+            if selected_customer_id != "__new__"
+            else _generate_customer_id(customer_name_value, customer_ids)
+        )
+
+        if selected_customer_id == "__new__":
+            st.text_input(
+                "Customer ID",
+                value=generated_customer_id,
+                disabled=True,
+                help="Automatically generated from the customer name and used by share links and customer-specific overrides.",
+            )
+        else:
+            st.text_input(
+                "Customer ID",
+                value=generated_customer_id,
+                disabled=True,
+                help="This ID stays fixed after creation because question overrides and shared links reference it.",
+            )
+
+        st.text_input("Customer Name", key="_admin_customer_name")
+
+        selected_make_key = st.selectbox(
+            "Make",
+            options=make_options,
+            format_func=lambda k: "— Select a make —" if k == "__none__" else ((catalog.get("makes", {}).get(k) or {}).get("label", k)),
+            key="_admin_customer_make_key",
+        )
+
+        models_map = (
+            (((catalog.get("makes", {}) or {}).get(selected_make_key, {}) or {}).get("models", {}) or {})
+            if selected_make_key != "__none__"
+            else {}
+        )
+        model_keys = list(models_map.keys())
+        model_options = ["__none__"] + model_keys
+        if st.session_state.get("_admin_customer_model_key") not in model_options:
+            st.session_state["_admin_customer_model_key"] = model_keys[0] if model_keys else "__none__"
+
+        selected_model_key = st.selectbox(
+            "Model",
+            options=model_options,
+            format_func=lambda k: "— Select a model —" if k == "__none__" else ((models_map.get(k) or {}).get("label", k)),
+            key="_admin_customer_model_key",
+        )
+
+        if selected_customer and not find_make_key_by_label(selected_customer.get("make")):
+            st.warning("This customer references a make that is no longer present in the catalog. Pick a valid make before saving.")
+        elif selected_customer and selected_make_key != "__none__" and not find_model_key_by_label(selected_make_key, selected_customer.get("model")):
+            st.warning("This customer references a model that is no longer present in the selected make. Pick a valid model before saving.")
+
+        save_customer = wide_button("💾 Save Customer", type="primary")
+        if save_customer:
+            customer_name = _as_str(st.session_state.get("_admin_customer_name"))
+            if selected_customer_id == "__new__":
+                customer_id_value = _generate_customer_id(customer_name, customer_ids)
+            else:
+                customer_id_value = selected_customer_id
+
+            if not customer_name:
+                st.error("Customer name is required.")
+            elif not customer_id_value:
+                st.error("Customer ID is required.")
+            elif selected_make_key == "__none__":
+                st.error("Select a make.")
+            elif selected_model_key == "__none__":
+                st.error("Select a model.")
+            else:
+                make_label_value = ((catalog.get("makes", {}).get(selected_make_key) or {}).get("label", selected_make_key))
+                model_label_value = ((models_map.get(selected_model_key) or {}).get("label", selected_model_key))
+                record = {
+                    "id": customer_id_value,
+                    "name": customer_name,
+                    "make": make_label_value,
+                    "model": model_label_value,
+                }
+
+                updated_customers: List[Dict[str, Any]] = []
+                replaced = False
+                for customer in customers:
+                    existing_id = _as_str(customer.get("id"))
+                    if selected_customer_id != "__new__" and existing_id == selected_customer_id:
+                        updated_customers.append(record)
+                        replaced = True
+                    else:
+                        updated_customers.append(customer)
+                if not replaced:
+                    updated_customers.append(record)
+
+                save_customers_config(updated_customers)
+                bump_data_version()
+                st.session_state["_admin_customer_pending_sel"] = customer_id_value
+                st.success("Customer saved.")
+                st.rerun()
+
+    with right_col:
+        st.markdown("### Delete")
+        if selected_customer_id == "__new__":
+            st.caption("Select an existing customer to remove it.")
+        else:
+            has_question_overrides = selected_customer_id in customer_override_root
+            st.checkbox("Confirm delete", key="_admin_customer_delete_confirm")
+            if has_question_overrides:
+                st.checkbox(
+                    "Also delete customer question overrides",
+                    key="_admin_customer_delete_overrides",
+                    help="Customer-specific question overrides are stored in questions.json under this customer ID.",
+                )
+                st.warning("This customer has question overrides. Remove them with the customer or keep the record.")
+            delete_customer = wide_button("🗑️ Delete Customer")
+            if delete_customer:
+                if not st.session_state.get("_admin_customer_delete_confirm"):
+                    st.error("Confirm the delete first.")
+                elif has_question_overrides and not st.session_state.get("_admin_customer_delete_overrides"):
+                    st.error("Enable override deletion before removing this customer.")
+                else:
+                    updated_customers = [
+                        customer
+                        for customer in customers
+                        if _as_str(customer.get("id")) != selected_customer_id
+                    ]
+                    save_customers_config(updated_customers)
+                    if has_question_overrides:
+                        questions.setdefault("overrides", {}).setdefault("by_customer", {}).pop(selected_customer_id, None)
+                        _write_json(QUESTIONS_FP, questions)
+                    bump_data_version()
+                    st.session_state["_admin_customer_pending_sel"] = "__new__"
+                    st.success("Customer deleted.")
+                    st.rerun()
+
+    st.markdown("### Current Customers")
+    customer_rows = []
+    for customer in customers:
+        customer_id_value = _as_str(customer.get("id"))
+        customer_rows.append(
+            {
+                "ID": customer_id_value,
+                "Name": _as_str(customer.get("name")),
+                "Make": _as_str(customer.get("make")),
+                "Model": _as_str(customer.get("model")),
+                "Question Overrides": "Yes" if customer_id_value in customer_override_root else "",
+            }
+        )
+    if customer_rows:
+        st.dataframe(pd.DataFrame(customer_rows), **editor_width_kwargs(width="stretch"), hide_index=True)
+    else:
+        st.info("No customers configured yet.")
+
+# -----------------------------
+# Categories & Sections Tab
+# -----------------------------
+with TAB[2]:
     st.subheader("Categories & Sections")
 
     with st.expander("Add Category", expanded=False):
@@ -974,7 +1331,7 @@ with TAB[1]:
 # -----------------------------
 # Question Sets Tab
 # -----------------------------
-with TAB[2]:
+with TAB[3]:
     st.subheader("Question Sets")
     st.write(
         "Manage questions at the category default, make/model override, or customer override level. "
@@ -1411,12 +1768,24 @@ with TAB[2]:
             st.stop()
 
         bank_sections = get_question_bank_sections(questions, selected_category_key)
-        edited_sections: List[Tuple[Dict[str, Any], pd.DataFrame]] = []
+        default_profile_sections, _ = build_sections_for_profile(
+            questions,
+            selected_category_key,
+            get_default_profile_id(questions, selected_category_key),
+        )
+        default_section_fields = {
+            str(section.get("key") or "").strip(): list(section.get("fields", []) or [])
+            for section in default_profile_sections
+            if str(section.get("key") or "").strip()
+        }
+        st.caption("Showing questions from the default profile for this category plus any explicit overrides. Uncheck Include to disable a default question for this scope.")
+        edited_sections: List[Tuple[Dict[str, Any], List[Dict[str, Any]], pd.DataFrame]] = []
 
         for section in bank_sections:
             section_key = section.get("key")
+            base_questions = default_section_fields.get(section_key, [])
             existing_questions = override_sections.get(section_key, []) or []
-            section_rows = [override_question_row(question, default_order=index) for index, question in enumerate(existing_questions, start=1)]
+            section_rows = build_override_editor_rows(base_questions, existing_questions)
             if not section_rows:
                 section_rows = [{
                     "Include": False,
@@ -1444,7 +1813,7 @@ with TAB[2]:
                         "Default Required": st.column_config.CheckboxColumn(disabled=True),
                     },
                 )
-                edited_sections.append((section, edited_df))
+                edited_sections.append((section, base_questions, edited_df))
 
         st.divider()
         st.markdown("### Add Question to Override Set")
@@ -1497,11 +1866,25 @@ with TAB[2]:
         if wide_button("Save Question Set", type="primary"):
             updated_scope_sections: Dict[str, List[Dict[str, Any]]] = {}
             section_errors: List[str] = []
-            for section, edited_df in edited_sections:
+            for section, base_questions, edited_df in edited_sections:
                 section_key = section.get("key")
                 rows = edited_df.to_dict("records")
+                base_question_map = {
+                    question_id(question): question
+                    for question in (base_questions or [])
+                    if isinstance(question, dict) and question_id(question)
+                }
+                base_order_by_id = {
+                    question_id(question): index
+                    for index, question in enumerate(base_questions or [], start=1)
+                    if isinstance(question, dict) and question_id(question)
+                }
                 try:
-                    built_questions = build_override_questions(rows)
+                    built_questions = build_override_questions(
+                        rows,
+                        base_question_map=base_question_map,
+                        base_order_by_id=base_order_by_id,
+                    )
                 except Exception as exc:
                     section_errors.append(f"Invalid override data in section '{section_label(section)}': {exc}")
                     continue
@@ -1832,7 +2215,7 @@ with TAB[2]:
 # -----------------------------
 # Media Library Tab
 # -----------------------------
-with TAB[3]:
+with TAB[4]:
     st.subheader("Media Library")
     st.write(
         "Upload images and brochures. Extract dimensions from brochure text if present.")
@@ -2087,7 +2470,7 @@ with TAB[3]:
 # -----------------------------
 # Imports Tab
 # -----------------------------
-with TAB[4]:
+with TAB[5]:
     st.subheader("Imports & Normalization")
     st.write(
         "Drop CSV/JSON lists of models with free-text dimensions; we will normalize to app schema."
@@ -2235,7 +2618,7 @@ with TAB[4]:
 # -----------------------------
 # Settings Tab
 # -----------------------------
-with TAB[5]:
+with TAB[6]:
     st.subheader("System Settings")
     st.write("Branding, PDF header/footer, and media defaults.")
 
@@ -2271,7 +2654,8 @@ with TAB[5]:
         # Make sure these keys exist
         s.setdefault("branding", {})
         s.setdefault("media", {})
-        s.setdefault("email", {})
+        s.pop("email", None)
+        s.pop("smtp", None)
 
         with c1:
             s["branding"]["company_name"] = st.text_input(
@@ -2297,18 +2681,6 @@ with TAB[5]:
                 options=hero_options,
                 index=hero_index,
             )
-
-        st.markdown("### Email Settings")
-        to_default = "\n".join(s.get("email", {}).get("to", []) or [])
-        cc_default = "\n".join(s.get("email", {}).get("cc", []) or [])
-        subject_default = s.get("email", {}).get("subject", "") or ""
-
-        to_text = st.text_area("To addresses", value=to_default, help="One address per line")
-        cc_text = st.text_area("CC addresses", value=cc_default, help="One address per line")
-        s["email"]["subject"] = st.text_input("Subject line", value=subject_default)
-
-        s["email"]["to"] = [line.strip() for line in to_text.splitlines() if line.strip()]
-        s["email"]["cc"] = [line.strip() for line in cc_text.splitlines() if line.strip()]
 
         submitted = st.form_submit_button("💾 Save Settings", type="primary")
 
@@ -2350,7 +2722,7 @@ def build_data_bundle_zip() -> bytes:
 # -----------------------------
 # Share Links Tab
 # -----------------------------
-with TAB[6]:
+with TAB[7]:
     st.subheader("Share Links")
     st.write("Generate pre-filled survey links for a customer or a specific make/model.")
 
@@ -2417,7 +2789,7 @@ with TAB[6]:
 # -----------------------------
 # Maintenance Tab
 # -----------------------------
-with TAB[7]:
+with TAB[8]:
     st.subheader("Maintenance")
 
     st.markdown("### All Drafts")

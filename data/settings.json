@@ -6,14 +6,5 @@
   },
   "media": {
     "hero_image": ""
-  },
-  "email": {
-    "to": [
-      "Projects@cashtechcurrency.com"
-    ],
-    "cc": [
-      "David_duggan@cashtechcurrency.com"
-    ],
-    "subject": "Site Survey Submission"
   }
 }

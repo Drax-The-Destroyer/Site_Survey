@@ -1,6 +1,7 @@
-import os
+﻿import os
 import datetime
 import json
+import random
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -27,7 +28,6 @@ from overrides import merge_overrides
 from form_renderer import apply_overrides as apply_field_overrides, render_section, seed_defaults
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 from pdf_builder import build_survey_pdf
-from utils.emailer import send_survey_email
 from question_profiles import (
     always_included_sections,
     build_sections_for_profile,
@@ -50,11 +50,53 @@ def deserialize_draft_data(data: Dict[str, Any]) -> Dict[str, Any]:
     return deserialize_draft_value(data)
 
 
+TECH_ID_NAMES = [
+    "Peter Parker", "Bruce Wayne", "Clark Kent", "Diana Prince", "Steve Rogers",
+    "Tony Stark", "Bruce Banner", "Natasha Romanoff", "Matt Murdock", "Wade Wilson",
+    "Logan Howlett", "Barry Allen", "Hal Jordan", "Arthur Curry", "Victor Stone",
+    "Reed Richards", "Sue Storm", "Johnny Storm", "Ben Grimm", "Scott Summers",
+    "Jean Grey", "Ororo Munroe", "Kurt Wagner", "Kitty Pryde", "Emma Frost",
+    "Remy LeBeau", "Anna Marie", "Bobby Drake", "Hank McCoy", "Jubilation Lee",
+    "Cable Summers", "Hope Summers", "Laura Kinney", "Piotr Rasputin", "Illyana Rasputina",
+    "Stephen Strange", "Scott Lang", "Carol Danvers", "Kamala Khan", "Monica Rambeau",
+    "Sam Wilson", "Bucky Barnes", "Clint Barton", "Kate Bishop", "Jennifer Walters",
+    "Marc Spector", "Danny Rand", "Luke Cage", "Jessica Jones", "Frank Castle",
+    "Elektra Natchios", "Misty Knight", "Colleen Wing", "Shang Chi", "Black Panther",
+    "Princess Shuri", "Riri Williams", "Miles Morales", "Gwen Stacy", "Cindy Moon",
+    "Miguel OHara", "Mayday Parker", "Billy Kaplan", "Tommy Shepherd", "Victor Shade",
+    "Wanda Maximoff", "Pietro Maximoff", "Billy Batson", "Mary Batson", "Freddy Freeman",
+    "Barbara Gordon", "Dick Grayson", "Jason Todd", "Tim Drake", "Damian Wayne",
+    "Selina Kyle", "Oswald Cobblepot", "Harleen Quinzel", "Pamela Isley", "Edward Nygma",
+    "Slade Wilson", "Dinah Lance", "Oliver Queen", "Roy Harper", "John Diggle",
+    "Kara Danvers", "Jonn Jonnz", "Lois Lane", "Lex Luthor", "Jimmy Olsen",
+    "John Stewart", "Guy Gardner", "Kyle Rayner", "Jessica Cruz", "Simon Baz",
+    "Wally West", "Bart Allen", "Jay Garrick", "Ted Kord", "Michael Carter",
+    "Kendra Saunders", "Carter Hall", "Rex Mason", "Garfield Logan", "Rachel Roth",
+    "Kori Anders", "Donna Troy", "Conner Kent", "Cassie Sandsmark", "Jaime Reyes",
+    "Billy Cranston", "Trini Kwan", "Zack Taylor", "Kimberly Hart", "Tommy Oliver",
+    "April ONeil", "Casey Jones", "Leonardo Hamato", "Raphael Hamato", "Donatello Hamato",
+    "Michelangelo Hamato", "Al Simmons", "Eric Brooks", "Mattie Franklin", "Terry McGinnis",
+    "Helena Bertinelli", "Cassandra Cain", "Stephanie Brown", "Renee Montoya", "Booster Gold",
+    "Zatanna Zatara", "John Constantine", "Swamp Thing", "Alec Holland", "Mera Curry",
+    "Norrin Radd", "Adam Warlock", "Richard Rider", "Sam Alexander", "Rocket Raccoon",
+    "Gamora Zen", "Drax Douglas", "Jessica Drew", "Peter Quill", "Silver Surfer",
+    "Blackagar Boltagon", "Medusa Boltagon", "Crystal Amaquelin", "Karnak Mander", "Gorgon Petragon",
+    "Maximus Boltagon", "Loki Laufeyson", "Thor Odinson", "Jane Foster", "Sif Asgard",
+    "Balder Odinson", "Amadeus Cho", "Doreen Green", "Robbie Reyes", "Johnny Blaze",
+    "Danny Ketch", "Marc Grayson", "Samantha Eve", "Nolan Grayson", "Allen Alien",
+    "Atom Eve", "Rex Splode", "Dupli Kate", "Cecil Stedman", "Debbie Grayson",
+]
+
+
+def _generate_tech_id() -> str:
+    return random.choice(TECH_ID_NAMES)
+
+
 def _ensure_tech_id() -> None:
     if st.session_state.get("tech_id"):
         return
     tech_param = str(st.query_params.get("tech") or "").strip()
-    st.session_state["tech_id"] = tech_param or str(uuid.uuid4())
+    st.session_state["tech_id"] = tech_param or _generate_tech_id()
 
 
 def _validate_session_state() -> None:
@@ -73,7 +115,8 @@ def _validate_session_state() -> None:
         "_show_required_errors", "_current_model_key",
         "make_sel", "model_sel", "profile_id",
         "same_weekdays", "weekend_closed", "apply_hours_presets",
-        "weekday_open_preset", "weekday_close_preset"
+        "apply_hours_all_days", "weekday_open_preset", "weekday_close_preset",
+        "hours_quick_template"
     }
     
     # Check for orphaned widget keys (form fields that aren't in form_data)
@@ -103,7 +146,42 @@ def _validate_session_state() -> None:
 # ---------------- App Config ----------------
 
 # st.set_page_config(page_title="Site Survey Form", layout="centered")
-st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="auto")
+
+st.markdown(
+    """
+<style>
+@media (max-width: 768px) {
+  .block-container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 1rem !important;
+  }
+
+  [data-testid="column"] {
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  div.stButton > button,
+  div.stDownloadButton > button,
+  div[data-testid="stFormSubmitButton"] button {
+    width: 100% !important;
+  }
+
+  .stTextInput input,
+  .stTextArea textarea,
+  .stSelectbox,
+  .stNumberInput,
+  .stDateInput,
+  .stTimeInput {
+    font-size: 16px !important;
+  }
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 # Load data-driven resources
 version = get_data_version()
@@ -184,52 +262,95 @@ def _merge_runtime_questions_into_sections(
 
         updated_section = dict(section)
         existing_fields = list(updated_section.get("fields", []) or [])
-        existing_names = {
-            str(field.get("name") or field.get("id") or "").strip()
-            for field in existing_fields
-            if isinstance(field, dict)
-        }
+        field_records: Dict[str, Dict[str, Any]] = {}
+        next_sequence = 1
+        highest_order = 0
+        for default_order, field in enumerate(existing_fields, start=1):
+            if not isinstance(field, dict):
+                continue
+            field_name = str(field.get("name") or field.get("id") or "").strip()
+            if not field_name:
+                continue
+            try:
+                sort_order = int(field.get("order", default_order))
+            except Exception:
+                sort_order = default_order
+            field_records[field_name] = {
+                "field": dict(field),
+                "order": sort_order,
+                "sequence": next_sequence,
+            }
+            next_sequence += 1
+            highest_order = max(highest_order, sort_order)
 
-        appended_fields = []
         for question in extra_questions:
             if not isinstance(question, dict):
                 continue
             field_name = str(question.get("name") or question.get("id") or question.get("key") or "").strip()
-            if not field_name or field_name in existing_names:
+            if not field_name:
                 continue
+
+            include = bool(question.get("include", True))
+            existing_record = field_records.get(field_name)
+            try:
+                order_value = int(
+                    question.get(
+                        "order",
+                        existing_record["order"] if existing_record else highest_order + 1,
+                    )
+                )
+            except Exception:
+                order_value = existing_record["order"] if existing_record else highest_order + 1
+
+            if existing_record:
+                if not include:
+                    field_records.pop(field_name, None)
+                    continue
+
+                merged_field = dict(existing_record["field"])
+                for key, value in question.items():
+                    if key in {"include", "key"}:
+                        continue
+                    if key == "visible_if" and value is None:
+                        merged_field.pop("visible_if", None)
+                        continue
+                    merged_field[key] = value
+                merged_field["name"] = field_name
+                merged_field.pop("key", None)
+                field_records[field_name] = {
+                    "field": merged_field,
+                    "order": order_value if "order" in question else existing_record["order"],
+                    "sequence": existing_record["sequence"],
+                }
+                highest_order = max(highest_order, field_records[field_name]["order"])
+                continue
+
+            if not include:
+                continue
+
             field = dict(question)
             field["name"] = field_name
             field.pop("key", None)
-            appended_fields.append(field)
-            existing_names.add(field_name)
+            field.pop("include", None)
+            field_records[field_name] = {
+                "field": field,
+                "order": order_value,
+                "sequence": next_sequence,
+            }
+            next_sequence += 1
+            highest_order = max(highest_order, order_value)
 
-        updated_section["fields"] = existing_fields + appended_fields
+        updated_fields = []
+        for record in sorted(field_records.values(), key=lambda item: (item["order"], item["sequence"])):
+            field = dict(record["field"])
+            field.pop("order", None)
+            field.pop("include", None)
+            updated_fields.append(field)
+
+        updated_section["fields"] = updated_fields
         merged_sections.append(updated_section)
 
     return merged_sections
-
-
-def _build_email_subject(
-    *,
-    answers: Dict[str, Any],
-    customer_name: Optional[str],
-    make: Optional[str],
-    model: Optional[str],
-) -> str:
-    site_name = (
-        customer_name
-        or str(answers.get("site_name") or "").strip()
-        or str(answers.get("store_name") or "").strip()
-        or str(answers.get("location_name") or "").strip()
-        or " ".join(part for part in [make, model] if part)
-        or "Unknown Site"
-    )
-    technician = (
-        str(answers.get("contact") or "").strip()
-        or str(answers.get("technician") or "").strip()
-        or "Unknown Technician"
-    )
-    return f"Site Survey - {site_name} - {technician}"
 
 
 def _sync_form_data_from_widget_state() -> None:
@@ -378,8 +499,8 @@ def _visibility_state_for_sections(
 
 # ==================== Sidebar: Draft Management & Export ====================
 with st.sidebar:
-    st.title("📋 Survey Management")
-    st.caption(f"🔑 Session: {str(st.session_state.get('tech_id', ''))[:8]}")
+    st.title("Survey Management")
+    st.caption(f"Session: {str(st.session_state.get('tech_id', ''))[:8]}")
     tech_id_input = st.text_input("Your name / tech ID", value=st.session_state.get("tech_id", ""), key="tech_id_input")
     if tech_id_input.strip() and tech_id_input.strip() != st.session_state.get("tech_id"):
         st.session_state["tech_id"] = tech_id_input.strip()
@@ -395,7 +516,7 @@ with st.sidebar:
     if "show_drafts" not in st.session_state:
         st.session_state["show_drafts"] = False
     
-    if st.button("📂 View My Drafts"):
+    if st.button("View My Drafts"):
         st.session_state["show_drafts"] = not st.session_state["show_drafts"]
     
     if st.session_state.get("show_drafts"):
@@ -418,14 +539,14 @@ with st.sidebar:
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("📥 Load", key=f"load_{survey_id}"):
+                    if st.button("Load", key=f"load_{survey_id}"):
                         loaded_data = db.load_draft(survey_id)
                         if loaded_data and apply_draft_payload_to_session(loaded_data, survey_id_override=survey_id):
                             logger.info(f"Draft loaded from sidebar", extra={"survey_id": survey_id})
                             st.success("Draft loaded!")
                             st.rerun()
                 with col2:
-                    if st.button("🗑️ Delete", key=f"del_{survey_id}"):
+                    if st.button("Delete", key=f"del_{survey_id}"):
                         if db.delete_draft(survey_id):
                             st.success("Draft deleted")
                             st.rerun()
@@ -441,7 +562,7 @@ with st.sidebar:
     current_export_payload = build_current_draft_payload()
     if st.session_state.get("survey_id"):
         st.download_button(
-            "💾 Export Draft (JSON)",
+            "Export Draft (JSON)",
             data=json.dumps(current_export_payload, indent=2),
             file_name=f"survey_draft_{st.session_state['survey_id']}.json",
             mime="application/json",
@@ -450,7 +571,7 @@ with st.sidebar:
         )
 
         if has_meaningful_draft_data(current_export_payload):
-            st.caption("💡 **Tip:** Download your draft before closing the browser to avoid data loss on Streamlit Cloud.")
+            st.caption("Tip: Download your draft before closing the browser to avoid data loss on Streamlit Cloud.")
         else:
             st.caption("Enter at least one real survey value before exporting a draft.")
     else:
@@ -458,7 +579,7 @@ with st.sidebar:
 
     st.markdown("### Import Draft (JSON)")
     import_file = st.file_uploader("Upload exported draft JSON", type=["json"], key="import_draft_json")
-    if st.button("📥 Import Draft", key="import_draft_btn"):
+    if st.button("Import Draft", key="import_draft_btn"):
         if import_file is None:
             st.warning("Choose a JSON file first.")
         else:
@@ -483,9 +604,9 @@ with st.sidebar:
     
     # NOTE about Streamlit Cloud ephemeral storage
     st.markdown("---")
-    st.caption("⚠️ **Note:** On Streamlit Cloud, the database is temporary and resets on app restart. Export important drafts before closing.")
+    st.caption("Note: On Streamlit Cloud, the database is temporary and resets on app restart. Export important drafts before closing.")
 
-st.title("📋 Site Survey Form")
+st.title("Site Survey Form")
 
 # --- Load Settings (branding + logo) ---
 SETTINGS_FP = os.path.join("data", "settings.json")
@@ -501,10 +622,8 @@ def load_settings():
 
     settings.setdefault("branding", {})
     settings.setdefault("media", {})
-    settings.setdefault("email", {})
-    settings["email"].setdefault("to", ["Projects@cashtechcurrency.com"])
-    settings["email"].setdefault("cc", ["David_duggan@cashtechcurrency.com"])
-    settings["email"].setdefault("subject", "Site Survey Submission")
+    settings.pop("email", None)
+    settings.pop("smtp", None)
     return settings
 
 def _hero_path(filename: str | None):
@@ -545,7 +664,7 @@ def _hero_path(filename: str | None):
         if os.path.exists(p):
             return p
 
-    # Not found — still return local path where it SHOULD be
+    # Not found - still return local path where it SHOULD be
     return local_paths[0]
     
 settings = load_settings()
@@ -663,7 +782,7 @@ selected_customer_id = st.selectbox(
     "Customer",
     options=customer_options,
     format_func=lambda cid: (
-        "— Select a customer —" if cid == "__none__"
+        "Select a customer" if cid == "__none__"
         else "Other / Manual Entry" if cid == "__manual__"
         else (customer_lookup.get(cid) or {}).get("name", cid)
     ),
@@ -740,10 +859,10 @@ else:
         
         if recent_draft_id:
             # Offer to resume draft
-            st.info(f"📂 Found a recent draft for {make} {model}")
+            st.info(f"Found a recent draft for {make} {model}")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📥 Resume Draft"):
+                if st.button("Resume Draft"):
                     loaded_data = db.load_draft(recent_draft_id)
                     if loaded_data and apply_draft_payload_to_session(
                         loaded_data,
@@ -754,7 +873,7 @@ else:
                         st.success("Draft loaded! Scroll down to continue.")
                         st.rerun()
             with col2:
-                if st.button("🆕 Start Fresh"):
+                if st.button("Start Fresh"):
                     st.session_state["survey_id"] = str(uuid.uuid4())
                     st.session_state["last_autosave"] = 0
                     logger.info(f"Started new survey", extra={"survey_id": st.session_state["survey_id"]})
@@ -942,7 +1061,7 @@ def try_autosave():
         if db.save_draft(st.session_state["survey_id"], save_data, user_id=st.session_state.get("tech_id", "")):
             st.session_state["last_autosave"] = current_time
             # Subtle success indicator (don't distract user)
-            st.caption("💾 Draft saved")
+            st.caption("Draft saved")
 
 # --- Upload Site Photos with Server-Side compression ---
 st.subheader("2. Upload Site Photos")
@@ -976,7 +1095,7 @@ if Config.ENABLE_CLIENT_COMPRESSION:
     # Process compressed photos (server-side compression)
     if compressed_photos:
         st.session_state["uploaded_photos"] = compressed_photos
-        st.success(f"✓ {len(compressed_photos)} photo(s) ready to add to survey")
+        st.success(f"{len(compressed_photos)} photo(s) ready to add to survey")
         
         # Update answers
         answers["photos"] = compressed_photos
@@ -985,10 +1104,10 @@ if Config.ENABLE_CLIENT_COMPRESSION:
         accepted_photos = compressed_photos
         
         # Show count
-        st.caption(f"📷 {len(compressed_photos)} of {max_count} photos attached")
+        st.caption(f"{len(compressed_photos)} of {max_count} photos attached")
         
         # Preview thumbnails - mobile-friendly grid
-        st.markdown("### 📸 Photo Preview")
+        st.markdown("### Photo Preview")
         
         # Mobile-responsive columns
         st.markdown("""
@@ -1021,7 +1140,7 @@ if Config.ENABLE_CLIENT_COMPRESSION:
         accepted_photos = restored_photos
         answers["photos"] = accepted_photos
         st.session_state["uploaded_photos"] = accepted_photos
-        st.caption(f"📷 {len(accepted_photos)} of {max_count} photos attached")
+        st.caption(f"{len(accepted_photos)} of {max_count} photos attached")
 else:
     # Fallback to standard file uploader if compression is disabled
     allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
@@ -1121,10 +1240,29 @@ TIME_STEP = datetime.timedelta(minutes=Config.TIME_PICKER_STEP_MINUTES)
 
 # ---------- Quick presets (optional) ----------
 st.markdown("**Quick Setup (optional)**")
+HOUR_PRESET_OPTIONS = {
+    "Custom": None,
+    "08:00 to 17:00": (datetime.time(8, 0), datetime.time(17, 0)),
+    "08:00 to 20:00": (datetime.time(8, 0), datetime.time(20, 0)),
+    "09:00 to 17:00": (datetime.time(9, 0), datetime.time(17, 0)),
+    "10:00 to 18:00": (datetime.time(10, 0), datetime.time(18, 0)),
+}
 
-qp_cols = st.columns([1.3, 1.3, 1, 1])
+selected_hours_template = st.selectbox(
+    "Common hours",
+    options=list(HOUR_PRESET_OPTIONS.keys()),
+    key="hours_quick_template",
+    help="Choose a common time range to prefill the open and close fields.",
+)
+
+selected_hours_range = HOUR_PRESET_OPTIONS[selected_hours_template]
+if selected_hours_range and st.session_state.get("_last_hours_quick_template") != selected_hours_template:
+    st.session_state["weekday_open_preset"], st.session_state["weekday_close_preset"] = selected_hours_range
+st.session_state["_last_hours_quick_template"] = selected_hours_template
+
+qp_cols = st.columns([1.2, 1.2, 1, 1])
 with qp_cols[0]:
-    same_weekdays = st.checkbox("Same hours Mon–Fri", key="same_weekdays")
+    same_weekdays = st.checkbox("Same hours Mon-Fri", key="same_weekdays")
 with qp_cols[1]:
     weekend_closed = st.checkbox("Closed Sat & Sun", key="weekend_closed")
 with qp_cols[2]:
@@ -1141,15 +1279,32 @@ with qp_cols[3]:
         key="weekday_close_preset",
         step=TIME_STEP,
     )
+st.caption("Enter the hours once here, then apply them to weekdays or the full week.")
 
-if st.button("Apply to selected days", key="apply_hours_presets"):
-    # Apply Mon–Fri block
+apply_cols = st.columns(2)
+with apply_cols[0]:
+    apply_selected_days = st.button("Apply to selected days", key="apply_hours_presets")
+with apply_cols[1]:
+    apply_all_days = st.button("Apply to all days", key="apply_hours_all_days")
+
+if apply_selected_days:
+    # Apply Mon-Fri block
     if same_weekdays:
         for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
             st.session_state[f"open_{d}"] = weekday_open
             st.session_state[f"close_{d}"] = weekday_close
             st.session_state[f"closed_{d}"] = False
     # Close weekend
+    if weekend_closed:
+        for d in ["Saturday", "Sunday"]:
+            st.session_state[f"closed_{d}"] = True
+
+if apply_all_days:
+    for d in days:
+        st.session_state[f"open_{d}"] = weekday_open
+        st.session_state[f"close_{d}"] = weekday_close
+        st.session_state[f"closed_{d}"] = False
+
     if weekend_closed:
         for d in ["Saturday", "Sunday"]:
             st.session_state[f"closed_{d}"] = True
@@ -1266,7 +1421,7 @@ def _collect_missing_required(
     return missing
 
 
-if st.button("📄 Generate PDF"):
+if st.button("Generate and Download PDF"):
     logger.info("PDF generation initiated", extra={"make": make, "model": model})
     
     # Merge collected inputs into session_state-based answers for validation
@@ -1317,40 +1472,13 @@ if st.button("📄 Generate PDF"):
                 "pdf_filename": file_name
             })
         
-        email_settings = settings.get("email", {}) or {}
-        to_addresses = list(email_settings.get("to", []) or [])
-        cc_addresses = list(email_settings.get("cc", []) or [])
-        selected_customer_name = None
-        if st.session_state.get("customer_id") not in {None, "__none__", "__manual__"}:
-            for customer in load_customers():
-                if customer.get("id") == st.session_state.get("customer_id"):
-                    selected_customer_name = customer.get("name")
-                    break
-        subject = _build_email_subject(
-            answers=filtered_validate_state,
-            customer_name=selected_customer_name,
-            make=make,
-            model=model,
+        st.success("PDF generated successfully.")
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_bytes,
+            file_name=file_name,
+            mime="application/pdf",
         )
-
-        try:
-            send_survey_email(
-                pdf_bytes=pdf_bytes,
-                filename=file_name,
-                to_addresses=to_addresses,
-                cc_addresses=cc_addresses,
-                subject=subject,
-            )
-            st.success("Survey emailed to the projects team.")
-        except Exception as email_exc:
-            logger.error("Survey email failed", extra={"error": str(email_exc), "pdf_filename": file_name}, exc_info=True)
-            st.error("Email failed — please download and send manually.")
-            st.download_button(
-                label="📄 Download PDF Report",
-                data=pdf_bytes,
-                file_name=file_name,
-                mime="application/pdf",
-            )
     except Exception as e:
         logger.error("PDF generation failed", extra={"error": str(e), "make": make, "model": model}, exc_info=True)
         st.error(f"Failed to generate PDF: {str(e)}")

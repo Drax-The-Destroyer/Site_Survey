@@ -11,12 +11,15 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import copy
+import re
 import streamlit as st
 
 from utils.logger import setup_logger
 from visible_if import is_visible as _is_visible
 
 logger = setup_logger(__name__)
+
+NUMBER_VALUE_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 
 
 def _find_field_index(fields: List[Dict[str, Any]], name: str) -> int:
@@ -157,16 +160,58 @@ def _translated_label(field: Dict[str, Any], lang: Optional[Dict[str, str]]) -> 
 def _coerce_number_input_defaults(field: Dict[str, Any]) -> Dict[str, Any]:
     # Provide sensible defaults for number_input to avoid Streamlit warnings
     kwargs: Dict[str, Any] = {}
+    uses_float = _number_field_uses_float(field)
     if "min" in field:
-        kwargs["min_value"] = field["min"]
+        min_value = field["min"]
+        kwargs["min_value"] = float(min_value) if uses_float and isinstance(min_value, int) else min_value
     if "max" in field:
-        kwargs["max_value"] = field["max"]
+        max_value = field["max"]
+        kwargs["max_value"] = float(max_value) if uses_float and isinstance(max_value, int) else max_value
     if "step" in field:
-        kwargs["step"] = field["step"]
+        step_value = field["step"]
+        kwargs["step"] = float(step_value) if uses_float and isinstance(step_value, int) else step_value
     else:
-        # Prefer integer step when reasonable
-        kwargs["step"] = 1 if isinstance(field.get("default"), int) else 1
+        kwargs["step"] = 0.01 if uses_float else 1
+    if "format" in field:
+        kwargs["format"] = field["format"]
     return kwargs
+
+
+def _number_field_uses_float(field: Dict[str, Any]) -> bool:
+    for key in ("min", "max", "step", "default"):
+        value = field.get(key)
+        if isinstance(value, float) and not value.is_integer():
+            return True
+    return False
+
+
+def _coerce_number_value(field: Dict[str, Any], value: Any) -> Any:
+    uses_float = _number_field_uses_float(field)
+
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        if uses_float:
+            return float(value)
+        return int(round(float(value)))
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        match = NUMBER_VALUE_RE.search(stripped.replace(",", ""))
+        if not match:
+            return None
+        try:
+            parsed = float(match.group(0))
+        except ValueError:
+            return None
+        if uses_float:
+            return parsed
+        return int(round(parsed))
+
+    return None
 
 
 def _get_default_value(field: Dict[str, Any]) -> Any:
@@ -178,7 +223,7 @@ def _get_default_value(field: Dict[str, Any]) -> Any:
     defaults = {
         "text": "",
         "textarea": "",
-        "number": 0,
+        "number": None,
         "multiselect": [],
         "checkbox": False,
         "radio": None,  # Will use placeholder/no default
@@ -232,6 +277,8 @@ def render_section(
 
         ftype = field.get("type", "text")
         help_text = field.get("help")
+        description_text = str(field.get("description") or "").strip()
+        checkbox_label = str(field.get("checkbox_label") or "Complete").strip() or "Complete"
         # Make Streamlit widget keys unique across sections to avoid duplicate-key crashes
         sec_prefix = section.get("key") or section.get("title") or "sec"
         key = f"{sec_prefix}__{name}"
@@ -277,14 +324,15 @@ def render_section(
         elif ftype == "number":
             _init_field_state(field, answers)
             kwargs = _coerce_number_input_defaults(field)
-            default_val = answers[name]
-            # Ensure default is numeric
-            if not isinstance(default_val, (int, float)):
-                try:
-                    default_val = int(default_val)
-                except Exception:
-                    default_val = 0
-            st.number_input(label_to_show, value=default_val, key=key, help=help_text, **kwargs)
+            default_val = _coerce_number_value(field, answers[name])
+            st.number_input(
+                label_to_show,
+                value=default_val,
+                key=key,
+                help=help_text,
+                placeholder=field.get("placeholder"),
+                **kwargs,
+            )
             answers[name] = st.session_state[key]
 
         elif ftype == "select":
@@ -310,7 +358,12 @@ def render_section(
 
         elif ftype == "checkbox":
             _init_field_state(field, answers)
-            st.checkbox(label_to_show, value=bool(answers[name]), key=key, help=help_text)
+            if description_text:
+                st.markdown(f"**{label_to_show}**")
+                st.markdown(description_text)
+                st.checkbox(checkbox_label, value=bool(answers[name]), key=key, help=help_text)
+            else:
+                st.checkbox(label_to_show, value=bool(answers[name]), key=key, help=help_text)
             answers[name] = st.session_state[key]
 
         elif ftype == "file":

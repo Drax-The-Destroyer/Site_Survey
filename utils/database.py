@@ -11,7 +11,7 @@ on app restart. For production, consider:
 import sqlite3
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.draft_state import has_meaningful_draft_data
@@ -42,6 +42,7 @@ class SurveyDatabase:
         
         # Initialize database schema
         self._init_db()
+        self.purge_stale_drafts()
         logger.info(f"Database initialized at {db_path}")
     
     def _init_db(self) -> None:
@@ -114,6 +115,35 @@ class SurveyDatabase:
         store_name = str(data.get("store_name") or form_data.get("store_name") or "")
         technician_name = str(data.get("technician_name") or form_data.get("technician_name") or "")
         return make, model, store_name, technician_name
+
+    def purge_stale_drafts(self, max_age_days: int = 7) -> int:
+        """
+        Delete draft records whose updated_at timestamp is older than max_age_days.
+
+        Completed surveys are left untouched.
+        """
+        try:
+            cutoff = (datetime.now() - timedelta(days=max_age_days)).isoformat()
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                DELETE FROM surveys
+                WHERE status = 'draft' AND updated_at < ?
+                """,
+                (cutoff,),
+            )
+            deleted = cursor.rowcount or 0
+            conn.commit()
+            conn.close()
+
+            if deleted:
+                logger.info("Purged stale drafts", extra={"deleted_count": deleted, "max_age_days": max_age_days})
+            return deleted
+        except Exception as e:
+            logger.error("Failed to purge stale drafts", extra={"error": str(e), "max_age_days": max_age_days}, exc_info=True)
+            return 0
     
     def save_draft(self, survey_id: str, data: Dict[str, Any], user_id: str = "") -> bool:
         """
@@ -130,6 +160,7 @@ class SurveyDatabase:
             True if save succeeded, False otherwise
         """
         try:
+            self.purge_stale_drafts()
             if not has_meaningful_draft_data(data):
                 logger.info("Skipped blank draft save", extra={"survey_id": survey_id})
                 return False
@@ -192,6 +223,7 @@ class SurveyDatabase:
             Survey data dictionary if found, None otherwise
         """
         try:
+            self.purge_stale_drafts()
             conn = self._get_connection()
             cursor = conn.cursor()
             
@@ -226,6 +258,7 @@ class SurveyDatabase:
             List of tuples: (id, store_name, make, model, updated_at, technician_name)
         """
         try:
+            self.purge_stale_drafts()
             conn = self._get_connection()
             cursor = conn.cursor()
             
@@ -345,11 +378,11 @@ class SurveyDatabase:
             Survey ID if found, None otherwise
         """
         try:
+            self.purge_stale_drafts()
             conn = self._get_connection()
             cursor = conn.cursor()
             
             # Calculate cutoff time
-            from datetime import timedelta
             cutoff = (datetime.now() - timedelta(hours=limit_hours)).isoformat()
             
             cursor.execute("""
@@ -388,6 +421,7 @@ class SurveyDatabase:
 
     def list_all_drafts(self, limit: int = 100) -> List[Tuple]:
         try:
+            self.purge_stale_drafts()
             conn = self._get_connection()
             cursor = conn.cursor()
 

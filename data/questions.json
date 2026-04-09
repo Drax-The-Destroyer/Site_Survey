@@ -365,12 +365,18 @@
         {
           "name": "download_speed",
           "label_key": "field.download_speed",
-          "type": "text"
+          "type": "number",
+          "min": 0,
+          "step": 1,
+          "format": "%d"
         },
         {
           "name": "upload_speed",
           "label_key": "field.upload_speed",
-          "type": "text"
+          "type": "number",
+          "min": 0,
+          "step": 1,
+          "format": "%d"
         },
         {
           "name": "other_safe",
@@ -595,18 +601,133 @@
     },
     "by_customer": {
       "canna_cabana": {
-        "delivery_base": [
+        "installation_location": [
           {
-            "id": "this_is_a_test_question_for_canna_cabana",
-            "name": "this_is_a_test_question_for_canna_cabana",
-            "label": "This is a test question for Canna Cabana",
+            "id": "will_the_safe_will_be_in_a_camera_view_after_its_installed",
+            "name": "will_the_safe_will_be_in_a_camera_view_after_its_installed",
+            "label": "Will the safe will be in a camera view after its installed?\"",
             "type": "radio",
-            "required": true,
+            "required": false,
             "order": 1,
             "options": [
-              "yes",
-              "no"
+              "Yes",
+              "No"
             ]
+          },
+          {
+            "id": "will_the_safe_will_be_near_any_windows_or_external_doors",
+            "name": "will_the_safe_will_be_near_any_windows_or_external_doors",
+            "label": "Will the safe will be near any windows or external doors?",
+            "type": "radio",
+            "required": false,
+            "order": 2,
+            "options": [
+              "Yes",
+              "No"
+            ]
+          }
+        ]
+      },
+      "chipotle_mexican_grill": {
+        "installation_location": [
+          {
+            "id": "which_install_location_will_be_used",
+            "name": "which_install_location_will_be_used",
+            "label": "Which install location will be used?",
+            "type": "radio",
+            "required": false,
+            "options": [
+              "Up front under the cup dispenser for new stores.",
+              "Back office under a desk (for old stores that do not have room up front.) Will need to keep a minimum of 18 inch space free under the desk after the safe is installed."
+            ]
+          }
+        ]
+      },
+      "shell": {
+        "delivery_base": [
+          {
+            "id": "stairs_count",
+            "name": "stairs_count",
+            "include": false
+          },
+          {
+            "id": "storage_floor_number",
+            "name": "storage_floor_number",
+            "include": false
+          },
+          {
+            "id": "storage_path_stairs_count",
+            "name": "storage_path_stairs_count",
+            "include": false
+          },
+          {
+            "id": "check_path_to_the_storage_location_to_ensure_the_safe_can_be_transported_there_look_for_narrow_paths_uneven_floors",
+            "name": "check_path_to_the_storage_location_to_ensure_the_safe_can_be_transported_there_look_for_narrow_paths_uneven_floors",
+            "label": "Check path to the storage location to ensure the safe can be transported there (Look for Narrow Paths, uneven floors).",
+            "type": "multiselect",
+            "required": false,
+            "order": 18,
+            "options": [
+              "Good",
+              "Not Good (See Photos)"
+            ]
+          },
+          {
+            "id": "where_they_will_store_the_safe_in_most_cases_in_their_bathroom_need_a_photo_of_where_it_s_going_to_be_stored",
+            "name": "where_they_will_store_the_safe_in_most_cases_in_their_bathroom_need_a_photo_of_where_it_s_going_to_be_stored",
+            "label": "Where they will store the safe?  In most cases in their bathroom.  Need a photo of where it's going to be stored.",
+            "type": "text",
+            "required": false,
+            "order": 19
+          }
+        ],
+        "installation_location": [
+          {
+            "id": "install_path_obstacles",
+            "name": "install_path_obstacles",
+            "include": false
+          },
+          {
+            "id": "install_path_stairs_count",
+            "name": "install_path_stairs_count",
+            "include": false
+          },
+          {
+            "id": "network",
+            "name": "network",
+            "include": false
+          },
+          {
+            "id": "network_distance",
+            "name": "network_distance",
+            "include": false
+          },
+          {
+            "id": "room_size",
+            "name": "room_size",
+            "include": false
+          },
+          {
+            "id": "storage_different_floor",
+            "name": "storage_different_floor",
+            "include": false
+          },
+          {
+            "id": "measure_from_the_back_wall_accounting_for_any_protruding_outlets_or_pipes_to_the_25_mark_photo_must_show_the_tape_measure_and_front_counter_edge_clearly",
+            "name": "measure_from_the_back_wall_accounting_for_any_protruding_outlets_or_pipes_to_the_25_mark_photo_must_show_the_tape_measure_and_front_counter_edge_clearly",
+            "label": "Measure from the back wall (accounting for any protruding outlets or pipes) to the 25\" mark — photo must show the tape measure and front counter edge clearly.",
+            "type": "radio",
+            "required": false,
+            "order": 26,
+            "options": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "id": "technician_name",
+            "name": "technician_name",
+            "order": 27
           }
         ]
       }
@@ -1029,14 +1150,20 @@
             {
               "name": "download_speed",
               "label_key": "field.download_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "download_speed",
               "required": false
             },
             {
               "name": "upload_speed",
               "label_key": "field.upload_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "upload_speed",
               "required": false
             },
@@ -1509,14 +1636,20 @@
             {
               "name": "download_speed",
               "label_key": "field.download_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "download_speed",
               "required": false
             },
             {
               "name": "upload_speed",
               "label_key": "field.upload_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "upload_speed",
               "required": false
             },
@@ -2023,14 +2156,20 @@
             {
               "name": "download_speed",
               "label_key": "field.download_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "download_speed",
               "required": false
             },
             {
               "name": "upload_speed",
               "label_key": "field.upload_speed",
-              "type": "text",
+              "type": "number",
+              "min": 0,
+              "step": 1,
+              "format": "%d",
               "id": "upload_speed",
               "required": false
             },

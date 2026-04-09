@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,6 +13,9 @@ from config import Config
 from visible_if import is_visible as visible_if_field, evaluate as visible_if_eval
 
 logger = setup_logger(__name__)
+
+MBPS_FIELDS = {"download_speed", "upload_speed"}
+MBPS_SUFFIX_RE = re.compile(r"\s*mbps\s*$", re.IGNORECASE)
 
 
 def sanitize(text: Any) -> str:
@@ -30,6 +34,32 @@ def sanitize(text: Any) -> str:
         .encode("latin-1", errors="ignore")
         .decode("latin-1")
     )
+
+
+def _format_numeric_like_text(value: Any) -> str:
+    if value is None or isinstance(value, bool):
+        return ""
+
+    if isinstance(value, (int, float)):
+        return f"{value:g}"
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    text = MBPS_SUFFIX_RE.sub("", text)
+    normalized = text.replace(",", "")
+    try:
+        return f"{float(normalized):g}"
+    except ValueError:
+        return text
+
+
+def format_field_value_for_pdf(field_name: str, value: Any) -> Any:
+    if field_name in MBPS_FIELDS:
+        numeric_text = _format_numeric_like_text(value)
+        return f"{numeric_text} Mbps" if numeric_text else ""
+    return value
 
 
 def normalize_model_for_filename(text: str) -> str:
@@ -658,7 +688,7 @@ def write_section_to_pdf_QA(
         name = field.get("name") or ""
         label = lang_map.get(field.get("label_key"), field.get("label", name))
         ftype = field.get("type", "text")
-        val = answers.get(name)
+        val = format_field_value_for_pdf(name, answers.get(name))
 
         force_full = field.get("layout") == "full"
 
@@ -735,7 +765,7 @@ def write_site_info(
                 field.get("label_key"), field.get("label", name)
             )
             ftype = field.get("type", "text")
-            val = answers.get(name)
+            val = format_field_value_for_pdf(name, answers.get(name))
 
             if ftype == "textarea":
                 if val not in (None, "", []):
@@ -787,7 +817,7 @@ def write_contact_info(
                     field.get("label_key"), field.get("label", name)
                 )
                 ftype = field.get("type", "text")
-                val = answers.get(name)
+                val = format_field_value_for_pdf(name, answers.get(name))
                 if ftype == "textarea":
                     if val not in (None, "", []):
                         para(pdf, label, val)

@@ -3,51 +3,6 @@
     "tidel": {
       "label": "TiDel",
       "models": {
-        "canna_cabana_tidel_d3_snf_std_w_o_storage_vault": {
-          "label": "Canna Cabana - TiDel D3 SNF STD w/o Storage Vault",
-          "category": "smart_safe",
-          "dimensions": {
-            "weight": "40 kg / 88 lb",
-            "width": "259 mm / 10.2 in",
-            "depth": "482 mm / 19.0 in",
-            "height": "705 mm / 27.8 in"
-          },
-          "media": {
-            "hero_image": "Series3_BC_1SNF_STD_WSV.png",
-            "gallery": [],
-            "brochures": []
-          }
-        },
-        "chipotle_mexican_grill_tidel_d4_snf_std": {
-          "label": "Chipotle Mexican Grill - TiDel D4 SNF STD",
-          "category": "smart_safe",
-          "dimensions": {
-            "weight": "43 kg / 96 lb",
-            "width": "311 mm / 12.2 in",
-            "depth": "584 mm / 23.0 in",
-            "height": "457 mm / 18 in"
-          },
-          "media": {
-            "hero_image": "Series4_BC_2BNF_STD.png",
-            "gallery": [],
-            "brochures": []
-          }
-        },
-        "series4_bc_1bnf_std_lsdv": {
-          "label": "Shell - Series 4 STD With Drop Vault",
-          "category": "smart_safe",
-          "dimensions": {
-            "weight": "68 kg / 149 lb",
-            "width": "311 mm / 12.25 in",
-            "depth": "584 mm / 23.0 in",
-            "height": "781 mm / 30.75 in"
-          },
-          "media": {
-            "hero_image": "Series4_BC_1BNF_STD_LSDV.jpg",
-            "gallery": [],
-            "brochures": []
-          }
-        },
         "series3_snf_lsdv": {
           "label": "Series 3 With Drop Vault",
           "category": "smart_safe",
@@ -149,6 +104,36 @@
           },
           "media": {
             "hero_image": "Series4_BC_2BNF_STD_LSDV_WTV-N.png",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series_3_snf_no_drop_vault": {
+          "label": "Series 3 SNF No Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "40 kg / 88 lb",
+            "width": "259 mm / 10.2 in",
+            "depth": "482 mm / 19.0 in",
+            "height": "705 mm / 27.8 in"
+          },
+          "media": {
+            "hero_image": "Series3_BC_1SNF_STD_WSV.png",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series_4_bnf": {
+          "label": "Series 4 BNF",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "43 kg / 95 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "457 mm / 18.0 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_2BNF_STD.png",
             "gallery": [],
             "brochures": []
           }
