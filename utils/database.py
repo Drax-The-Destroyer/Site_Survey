@@ -46,6 +46,7 @@ class SurveyDatabase:
     
     def _init_db(self) -> None:
         """Create database tables if they don't exist."""
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -72,12 +73,7 @@ class SurveyDatabase:
             except sqlite3.OperationalError:
                 pass
 
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS tech_profiles (
-                    name TEXT PRIMARY KEY,
-                    last_used TEXT NOT NULL
-                )
-            """)
+            self._ensure_tech_profiles_table(cursor)
             
             # Create indexes for common queries
             cursor.execute("""
@@ -96,12 +92,56 @@ class SurveyDatabase:
             """)
             
             conn.commit()
-            conn.close()
             
             logger.info("Database schema initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize database schema", extra={"error": str(e)}, exc_info=True)
             raise
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def _get_table_columns(self, cursor: sqlite3.Cursor, table_name: str) -> List[str]:
+        """Return the column names for a table, or an empty list if the table does not exist."""
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        return [str(row[1]) for row in cursor.fetchall()]
+
+    def _ensure_tech_profiles_table(self, cursor: sqlite3.Cursor) -> None:
+        """
+        Ensure tech_profiles is keyed by user_id so browser-specific names can coexist.
+
+        Older databases used `name` as the primary key, which made the saved profile
+        effectively global and prevented duplicate human names across browsers.
+        """
+        columns = self._get_table_columns(cursor, "tech_profiles")
+
+        if not columns:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tech_profiles (
+                    user_id TEXT PRIMARY KEY DEFAULT '',
+                    name TEXT DEFAULT '',
+                    last_used TEXT NOT NULL
+                )
+            """)
+            return
+
+        if "user_id" in columns:
+            return
+
+        legacy_table = f"tech_profiles_legacy_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        cursor.execute("DROP INDEX IF EXISTS idx_tech_profiles_last_used")
+        cursor.execute(f'ALTER TABLE tech_profiles RENAME TO "{legacy_table}"')
+        cursor.execute("""
+            CREATE TABLE tech_profiles (
+                user_id TEXT PRIMARY KEY DEFAULT '',
+                name TEXT DEFAULT '',
+                last_used TEXT NOT NULL
+            )
+        """)
+        logger.info(
+            "Migrated tech_profiles to user_id keyed schema; legacy rows were preserved separately",
+            extra={"legacy_table": legacy_table},
+        )
     
     def _get_connection(self) -> sqlite3.Connection:
         """
@@ -127,10 +167,11 @@ class SurveyDatabase:
         technician_name = str(data.get("technician_name") or form_data.get("technician_name") or "")
         return make, model, store_name, technician_name
 
-    def save_tech_name(self, name: str) -> None:
+    def save_tech_name(self, user_id: str, name: str) -> None:
         """Persist the technician name and update its last-used timestamp."""
+        browser_user_id = str(user_id or "").strip()
         tech_name = str(name or "").strip()
-        if not tech_name:
+        if not browser_user_id or browser_user_id == "unknown" or not tech_name:
             return
 
         conn: Optional[sqlite3.Connection] = None
@@ -139,16 +180,73 @@ class SurveyDatabase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO tech_profiles (name, last_used)
-                VALUES (?, ?)
-                ON CONFLICT(name) DO UPDATE SET last_used = excluded.last_used
+                INSERT INTO tech_profiles (user_id, name, last_used)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE
+                SET name = excluded.name,
+                    last_used = excluded.last_used
                 """,
-                (tech_name, datetime.now(timezone.utc).isoformat()),
+                (browser_user_id, tech_name, datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
-            logger.info("Tech name saved", extra={"tech_name": tech_name})
+            logger.info("Tech name saved", extra={"tech_name": tech_name, "user_id": browser_user_id})
         except Exception as e:
-            logger.error("Failed to save tech name", extra={"tech_name": tech_name, "error": str(e)}, exc_info=True)
+            logger.error(
+                "Failed to save tech name",
+                extra={"tech_name": tech_name, "user_id": browser_user_id, "error": str(e)},
+                exc_info=True,
+            )
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def get_tech_name(self, user_id: str) -> Optional[str]:
+        """Return the saved technician name for a given browser user ID, if any."""
+        browser_user_id = str(user_id or "").strip()
+        if not browser_user_id or browser_user_id == "unknown":
+            return None
+
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name
+                FROM tech_profiles
+                WHERE user_id = ? AND TRIM(COALESCE(name, '')) <> ''
+                LIMIT 1
+                """,
+                (browser_user_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            tech_name = str(row[0] or "").strip()
+            return tech_name or None
+        except Exception as e:
+            logger.error("Failed to load tech name", extra={"user_id": browser_user_id, "error": str(e)}, exc_info=True)
+            return None
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def delete_tech_name(self, user_id: str) -> None:
+        """Delete the saved technician name for a given browser user ID."""
+        browser_user_id = str(user_id or "").strip()
+        if not browser_user_id or browser_user_id == "unknown":
+            return
+
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM tech_profiles WHERE user_id = ?", (browser_user_id,))
+            conn.commit()
+            logger.info("Tech name deleted", extra={"user_id": browser_user_id})
+        except Exception as e:
+            logger.error("Failed to delete tech name", extra={"user_id": browser_user_id, "error": str(e)}, exc_info=True)
         finally:
             if conn is not None:
                 conn.close()
@@ -277,7 +375,7 @@ class SurveyDatabase:
             }, exc_info=True)
             return False
     
-    def load_draft(self, survey_id: str) -> Optional[Dict[str, Any]]:
+    def load_draft(self, survey_id: str, user_id: str = "") -> Optional[Dict[str, Any]]:
         """
         Load a survey draft by ID.
         
@@ -292,7 +390,10 @@ class SurveyDatabase:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT data FROM surveys WHERE id = ?", (survey_id,))
+            if user_id:
+                cursor.execute("SELECT data FROM surveys WHERE id = ? AND user_id = ?", (survey_id, user_id))
+            else:
+                cursor.execute("SELECT data FROM surveys WHERE id = ?", (survey_id,))
             result = cursor.fetchone()
             
             conn.close()
@@ -398,7 +499,7 @@ class SurveyDatabase:
             }, exc_info=True)
             return False
     
-    def delete_draft(self, survey_id: str) -> bool:
+    def delete_draft(self, survey_id: str, user_id: str = "") -> bool:
         """
         Delete a survey draft.
         
@@ -412,7 +513,10 @@ class SurveyDatabase:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("DELETE FROM surveys WHERE id = ?", (survey_id,))
+            if user_id:
+                cursor.execute("DELETE FROM surveys WHERE id = ? AND user_id = ?", (survey_id, user_id))
+            else:
+                cursor.execute("DELETE FROM surveys WHERE id = ?", (survey_id,))
             
             conn.commit()
             conn.close()

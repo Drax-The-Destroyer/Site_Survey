@@ -41,7 +41,7 @@ def _format_numeric_like_text(value: Any) -> str:
         return ""
 
     if isinstance(value, (int, float)):
-        return f"{value:g}"
+        return f"{float(value):.2f}"
 
     text = str(value).strip()
     if not text:
@@ -50,7 +50,7 @@ def _format_numeric_like_text(value: Any) -> str:
     text = MBPS_SUFFIX_RE.sub("", text)
     normalized = text.replace(",", "")
     try:
-        return f"{float(normalized):g}"
+        return f"{float(normalized):.2f}"
     except ValueError:
         return text
 
