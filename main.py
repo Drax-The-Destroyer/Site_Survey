@@ -147,7 +147,7 @@ def _validate_session_state() -> None:
         if key.startswith(("FormSubmitter:", "load_", "del_", "download_")):
             continue
         # Skip hours of operation keys (managed separately)
-        if key.startswith(("open_", "close_", "closed_")):
+        if key.startswith(("open_", "close_", "closed_", "open_24h_")):
             continue
         # If it's not in form_data, it might be orphaned
         if key not in form_data_keys:
@@ -388,14 +388,22 @@ def _sync_form_data_from_widget_state() -> None:
         open_key = f"open_{day}"
         close_key = f"close_{day}"
         closed_key = f"closed_{day}"
-        if open_key not in st.session_state and close_key not in st.session_state and closed_key not in st.session_state:
+        open_24h_key = f"open_24h_{day}"
+        if (
+            open_key not in st.session_state
+            and close_key not in st.session_state
+            and closed_key not in st.session_state
+            and open_24h_key not in st.session_state
+        ):
             continue
         has_hours_state = True
         closed = bool(st.session_state.get(closed_key, False))
+        open_24h = bool(st.session_state.get(open_24h_key, False))
         hours[day] = {
-            "open": None if closed else st.session_state.get(open_key),
-            "close": None if closed else st.session_state.get(close_key),
+            "open": None if (closed or open_24h) else st.session_state.get(open_key),
+            "close": None if (closed or open_24h) else st.session_state.get(close_key),
             "closed": closed,
+            "open_24h": open_24h,
         }
     if has_hours_state:
         form_data["hours"] = hours
@@ -457,10 +465,17 @@ def _restore_hours_state(form_data: Dict[str, Any]) -> None:
 
         open_value = _coerce_time_for_widget(entry.get("open", defaults["open"])) or default_open_widget
         close_value = _coerce_time_for_widget(entry.get("close", defaults["close"])) or default_close_widget
+        open_24h_value = bool(entry.get("open_24h", defaults.get("open_24h", False)))
+        closed_value = bool(entry.get("closed", defaults["closed"]))
+        if open_24h_value:
+            closed_value = False
+        elif closed_value:
+            open_24h_value = False
 
         st.session_state[f"open_{day}"] = open_value
         st.session_state[f"close_{day}"] = close_value
-        st.session_state[f"closed_{day}"] = bool(entry.get("closed", defaults["closed"]))
+        st.session_state[f"closed_{day}"] = closed_value
+        st.session_state[f"open_24h_{day}"] = open_24h_value
 
 
 def apply_draft_payload_to_session(
@@ -502,6 +517,15 @@ def apply_draft_payload_to_session(
     st.session_state["_show_required_errors"] = False
     _restore_hours_state(form_data)
     return True
+
+
+def _sync_day_hours_toggle_state(day: str, changed_field: str) -> None:
+    closed_key = f"closed_{day}"
+    open_24h_key = f"open_24h_{day}"
+    if changed_field == "closed" and st.session_state.get(closed_key):
+        st.session_state[open_24h_key] = False
+    elif changed_field == "open_24h" and st.session_state.get(open_24h_key):
+        st.session_state[closed_key] = False
 
 
 def _visibility_state_for_sections(
@@ -1289,6 +1313,7 @@ TIME_STEP = datetime.timedelta(minutes=Config.TIME_PICKER_STEP_MINUTES)
 st.markdown("**Quick Setup (optional)**")
 HOUR_PRESET_OPTIONS = {
     "Custom": None,
+    "24 Hours": "24h",
     "08:00 to 17:00": (datetime.time(8, 0), datetime.time(17, 0)),
     "08:00 to 20:00": (datetime.time(8, 0), datetime.time(20, 0)),
     "09:00 to 17:00": (datetime.time(9, 0), datetime.time(17, 0)),
@@ -1303,8 +1328,9 @@ selected_hours_template = st.selectbox(
 )
 
 selected_hours_range = HOUR_PRESET_OPTIONS[selected_hours_template]
-if selected_hours_range and st.session_state.get("_last_hours_quick_template") != selected_hours_template:
+if isinstance(selected_hours_range, tuple) and st.session_state.get("_last_hours_quick_template") != selected_hours_template:
     st.session_state["weekday_open_preset"], st.session_state["weekday_close_preset"] = selected_hours_range
+is_24h_preset = selected_hours_template == "24 Hours"
 st.session_state["_last_hours_quick_template"] = selected_hours_template
 
 qp_cols = st.columns([1.2, 1.2, 1, 1])
@@ -1318,6 +1344,7 @@ with qp_cols[2]:
         value=DEFAULT_OPEN_TIME,
         key="weekday_open_preset",
         step=TIME_STEP,
+        disabled=is_24h_preset,
     )
 with qp_cols[3]:
     weekday_close = st.time_input(
@@ -1325,6 +1352,7 @@ with qp_cols[3]:
         value=datetime.time(17, 0),  # 5 PM typical
         key="weekday_close_preset",
         step=TIME_STEP,
+        disabled=is_24h_preset,
     )
 st.caption("Enter the hours once here, then apply them to weekdays or the full week.")
 
@@ -1341,30 +1369,35 @@ if apply_selected_days:
             st.session_state[f"open_{d}"] = weekday_open
             st.session_state[f"close_{d}"] = weekday_close
             st.session_state[f"closed_{d}"] = False
+            st.session_state[f"open_24h_{d}"] = is_24h_preset
     # Close weekend
     if weekend_closed:
         for d in ["Saturday", "Sunday"]:
             st.session_state[f"closed_{d}"] = True
+            st.session_state[f"open_24h_{d}"] = False
 
 if apply_all_days:
     for d in days:
         st.session_state[f"open_{d}"] = weekday_open
         st.session_state[f"close_{d}"] = weekday_close
         st.session_state[f"closed_{d}"] = False
+        st.session_state[f"open_24h_{d}"] = is_24h_preset
 
     if weekend_closed:
         for d in ["Saturday", "Sunday"]:
             st.session_state[f"closed_{d}"] = True
+            st.session_state[f"open_24h_{d}"] = False
 
 st.markdown("---")
 
-# ---------- Per-day hours w/ Closed checkbox ----------
+# ---------- Per-day hours w/ Closed / 24 Hours checkbox ----------
 hours: Dict[str, Any] = {}
 
 for day in days:
     open_key = f"open_{day}"
     close_key = f"close_{day}"
     closed_key = f"closed_{day}"
+    open_24h_key = f"open_24h_{day}"
 
     # Seed defaults only once per session
     if open_key not in st.session_state:
@@ -1374,36 +1407,55 @@ for day in days:
     # Default weekends to closed, weekdays to open
     if closed_key not in st.session_state:
         st.session_state[closed_key] = day in {"Saturday", "Sunday"}
+    if open_24h_key not in st.session_state:
+        st.session_state[open_24h_key] = False
 
-    cols = st.columns([1.1, 0.9, 1.5, 1.5])
+    cols = st.columns([1.1, 0.8, 0.8, 1.3, 1.3])
 
     with cols[0]:
         st.markdown(f"**{day}**")
 
     with cols[1]:
-        closed = st.checkbox("Closed", key=closed_key)
+        st.checkbox(
+            "Closed",
+            key=closed_key,
+            on_change=_sync_day_hours_toggle_state,
+            args=(day, "closed"),
+        )
 
     with cols[2]:
+        st.checkbox(
+            "24 Hours",
+            key=open_24h_key,
+            on_change=_sync_day_hours_toggle_state,
+            args=(day, "open_24h"),
+        )
+
+    closed = bool(st.session_state.get(closed_key, False))
+    open_24h = bool(st.session_state.get(open_24h_key, False))
+
+    with cols[3]:
         open_time = st.time_input(
             f"Open {day}",
             key=open_key,
             step=TIME_STEP,
-            disabled=closed,
+            disabled=closed or open_24h,
         )
 
-    with cols[3]:
+    with cols[4]:
         close_time = st.time_input(
             f"Close {day}",
             key=close_key,
             step=TIME_STEP,
-            disabled=closed,
+            disabled=closed or open_24h,
         )
 
     # Store a richer structure so PDF knows about "closed"
     hours[day] = {
-        "open": None if closed else open_time,
-        "close": None if closed else close_time,
+        "open": None if (closed or open_24h) else open_time,
+        "close": None if (closed or open_24h) else close_time,
         "closed": closed,
+        "open_24h": open_24h,
     }
 
 answers["hours"] = hours

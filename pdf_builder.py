@@ -358,6 +358,7 @@ def hours_table(pdf: FPDF, hours_dict: Dict[str, Any]) -> None:
         # Support both legacy (open_t, close_t) tuple and new dict structure
         if isinstance(val, dict):
             closed = bool(val.get("closed", False))
+            open_24h = bool(val.get("open_24h", False))
             open_t = val.get("open")
             close_t = val.get("close")
         else:
@@ -367,6 +368,7 @@ def hours_table(pdf: FPDF, hours_dict: Dict[str, Any]) -> None:
             except Exception:
                 open_t, close_t = None, None
             closed = not (open_t or close_t)
+            open_24h = False
 
         if remaining_height(pdf) < (H_TABLE + 2):
             pdf.add_page()
@@ -374,7 +376,10 @@ def hours_table(pdf: FPDF, hours_dict: Dict[str, Any]) -> None:
 
         if closed:
             o = "Closed"
-            c = "Closed"
+            c = "—"
+        elif open_24h:
+            o = "24 Hours"
+            c = "—"
         else:
             o = fmt_time_or_dash(open_t)
             c = fmt_time_or_dash(close_t)

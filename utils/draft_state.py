@@ -47,6 +47,7 @@ def default_hours_template() -> Dict[str, Dict[str, Any]]:
             "open": None if day in {"Saturday", "Sunday"} else DEFAULT_OPEN_TIME,
             "close": None if day in {"Saturday", "Sunday"} else DEFAULT_CLOSE_TIME,
             "closed": day in {"Saturday", "Sunday"},
+            "open_24h": False,
         }
         for day in HOUR_DAYS
     }
@@ -140,10 +141,17 @@ def _normalize_hours_value(hours: Any) -> Dict[str, Dict[str, Any]]:
         raw_entry = hours.get(day)
         if not isinstance(raw_entry, Mapping):
             continue
+        open_24h = bool(raw_entry.get("open_24h"))
+        closed = bool(raw_entry.get("closed"))
+        if open_24h:
+            closed = False
+        elif closed:
+            open_24h = False
         normalized[day] = {
-            "open": _normalize_time_like(raw_entry.get("open")),
-            "close": _normalize_time_like(raw_entry.get("close")),
-            "closed": bool(raw_entry.get("closed")),
+            "open": None if (closed or open_24h) else _normalize_time_like(raw_entry.get("open")),
+            "close": None if (closed or open_24h) else _normalize_time_like(raw_entry.get("close")),
+            "closed": closed,
+            "open_24h": open_24h,
         }
 
     return normalized
