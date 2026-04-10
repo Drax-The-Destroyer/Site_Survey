@@ -494,6 +494,7 @@ def apply_draft_payload_to_session(
 
     st.session_state["form_data"] = form_data
     st.session_state["uploaded_photos"] = list(form_data.get("photos", [])) if isinstance(form_data.get("photos"), list) else []
+    st.session_state["accumulated_photos"] = list(form_data.get("photos", [])) if isinstance(form_data.get("photos"), list) else []
     st.session_state["survey_id"] = survey_id_override or safe_payload.get("survey_id") or st.session_state.get("survey_id") or str(uuid.uuid4())
     st.session_state["last_autosave"] = 0
     st.session_state["_show_required_errors"] = False
@@ -1106,6 +1107,8 @@ from utils.photo_handler import create_photo_uploader_with_compression
 # Initialize session state for photos if not present
 if "uploaded_photos" not in st.session_state:
     st.session_state["uploaded_photos"] = []
+if "accumulated_photos" not in st.session_state:
+    st.session_state["accumulated_photos"] = []
 
 restored_photos = answers.get("photos", [])
 if not isinstance(restored_photos, list):
@@ -1122,19 +1125,38 @@ if Config.ENABLE_CLIENT_COMPRESSION:
     
     # Process compressed photos (server-side compression)
     if compressed_photos:
-        st.session_state["uploaded_photos"] = compressed_photos
-        st.success(f"{len(compressed_photos)} photo(s) ready to add to survey")
-        
-        # Update answers
-        answers["photos"] = compressed_photos
-        
-        # Set accepted_photos for PDF builder (expects this variable name)
-        accepted_photos = compressed_photos
-        
-        # Show count
-        st.caption(f"{len(compressed_photos)} of {max_count} photos attached")
-        
-        # Preview thumbnails - mobile-friendly grid
+        merged_photos = list(st.session_state["accumulated_photos"])
+        existing_names = {
+            photo_entry.get("name")
+            for photo_entry in merged_photos
+            if isinstance(photo_entry, dict) and photo_entry.get("name")
+        }
+        added_count = 0
+
+        for photo_entry in compressed_photos:
+            if not isinstance(photo_entry, dict):
+                continue
+            photo_name = photo_entry.get("name")
+            if photo_name and photo_name in existing_names:
+                continue
+            merged_photos.append(photo_entry)
+            if photo_name:
+                existing_names.add(photo_name)
+            added_count += 1
+
+        st.session_state["accumulated_photos"] = merged_photos
+        if added_count:
+            st.success(f"{added_count} photo(s) ready to add to survey")
+    elif not st.session_state["accumulated_photos"] and restored_photos:
+        st.session_state["accumulated_photos"] = list(restored_photos)
+
+    accepted_photos = st.session_state["accumulated_photos"]
+    answers["photos"] = accepted_photos
+    st.session_state["uploaded_photos"] = accepted_photos
+    st.caption(f"{len(accepted_photos)} of {max_count} photos attached")
+
+    # Preview thumbnails - mobile-friendly grid
+    if accepted_photos:
         st.markdown("### Photo Preview")
         
         # Mobile-responsive columns
@@ -1155,7 +1177,7 @@ if Config.ENABLE_CLIENT_COMPRESSION:
         num_cols = 5
         cols = st.columns(num_cols)
         
-        for i, photo_entry in enumerate(compressed_photos):
+        for i, photo_entry in enumerate(accepted_photos):
             img_bytes = photo_entry.get("data") or b""
             if not img_bytes:
                 continue
@@ -1164,11 +1186,6 @@ if Config.ENABLE_CLIENT_COMPRESSION:
                     st.image(img_bytes, caption=photo_entry.get("name", "")[:20] + "...", use_column_width=True)
                 except Exception:
                     pass
-    else:
-        accepted_photos = restored_photos
-        answers["photos"] = accepted_photos
-        st.session_state["uploaded_photos"] = accepted_photos
-        st.caption(f"{len(accepted_photos)} of {max_count} photos attached")
 else:
     # Fallback to standard file uploader if compression is disabled
     allowed_exts: List[str] = rules.get("allowed_ext", [".jpg", ".png"]) or []
