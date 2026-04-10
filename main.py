@@ -487,6 +487,8 @@ def apply_draft_payload_to_session(
         st.session_state["make_sel"] = safe_payload["make_sel"]
     if restore_selection and safe_payload.get("model_sel"):
         st.session_state["model_sel"] = safe_payload["model_sel"]
+    if restore_selection and safe_payload.get("customer_id"):
+        st.session_state["customer_id"] = safe_payload["customer_id"]
     if safe_payload.get("profile_id"):
         st.session_state["profile_id"] = safe_payload["profile_id"]
     if safe_payload.get("tech_id"):

@@ -14,9 +14,11 @@ DRAFT_SCHEMA_VERSION = 1
 DRAFT_ALLOWED_TOP_LEVEL_KEYS = {
     "schema_version",
     "survey_id",
+    "customer_id",
     "make_sel",
     "model_sel",
     "profile_id",
+    "tech_id",
     "make",
     "model",
     "category",
@@ -198,7 +200,7 @@ def extract_safe_draft_payload(
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {"schema_version": DRAFT_SCHEMA_VERSION}
 
-    for key in ("survey_id", "make_sel", "model_sel", "profile_id", "make", "model", "category"):
+    for key in ("survey_id", "customer_id", "make_sel", "model_sel", "profile_id", "tech_id", "make", "model", "category"):
         value = source.get(key)
         if isinstance(value, str) and value.strip():
             payload[key] = value
