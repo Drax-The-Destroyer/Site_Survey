@@ -5,13 +5,12 @@ NOTE: On Streamlit Cloud, the database file is ephemeral and will be lost
 on app restart. For production, consider:
 1. Export draft as JSON download before closing browser
 2. Migrate to persistent database (PostgreSQL, Supabase, etc.)
-3. Store drafts in browser localStorage as backup
 """
 
 import sqlite3
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.draft_state import has_meaningful_draft_data
@@ -46,7 +45,7 @@ class SurveyDatabase:
         logger.info(f"Database initialized at {db_path}")
     
     def _init_db(self) -> None:
-        """Create surveys table if it doesn't exist."""
+        """Create database tables if they don't exist."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -72,6 +71,13 @@ class SurveyDatabase:
                 cursor.execute("ALTER TABLE surveys ADD COLUMN user_id TEXT DEFAULT ''")
             except sqlite3.OperationalError:
                 pass
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tech_profiles (
+                    name TEXT PRIMARY KEY,
+                    last_used TEXT NOT NULL
+                )
+            """)
             
             # Create indexes for common queries
             cursor.execute("""
@@ -82,6 +88,11 @@ class SurveyDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_updated_at 
                 ON surveys(updated_at DESC)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tech_profiles_last_used
+                ON tech_profiles(last_used DESC)
             """)
             
             conn.commit()
@@ -115,6 +126,60 @@ class SurveyDatabase:
         store_name = str(data.get("store_name") or form_data.get("store_name") or "")
         technician_name = str(data.get("technician_name") or form_data.get("technician_name") or "")
         return make, model, store_name, technician_name
+
+    def save_tech_name(self, name: str) -> None:
+        """Persist the technician name and update its last-used timestamp."""
+        tech_name = str(name or "").strip()
+        if not tech_name:
+            return
+
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO tech_profiles (name, last_used)
+                VALUES (?, ?)
+                ON CONFLICT(name) DO UPDATE SET last_used = excluded.last_used
+                """,
+                (tech_name, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            logger.info("Tech name saved", extra={"tech_name": tech_name})
+        except Exception as e:
+            logger.error("Failed to save tech name", extra={"tech_name": tech_name, "error": str(e)}, exc_info=True)
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def get_last_tech_name(self) -> Optional[str]:
+        """Return the most recently used technician name, if any."""
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name
+                FROM tech_profiles
+                WHERE TRIM(COALESCE(name, '')) <> ''
+                ORDER BY last_used DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            tech_name = str(row[0] or "").strip()
+            return tech_name or None
+        except Exception as e:
+            logger.error("Failed to load last tech name", extra={"error": str(e)}, exc_info=True)
+            return None
+        finally:
+            if conn is not None:
+                conn.close()
 
     def purge_stale_drafts(self, max_age_days: int = 7) -> int:
         """

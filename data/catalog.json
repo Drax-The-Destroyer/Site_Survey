@@ -137,6 +137,21 @@
             "gallery": [],
             "brochures": []
           }
+        },
+        "series_4_1bnf_std_with_drop_vault": {
+          "label": "Series 4 1BNF STD with Drop Vault",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 150 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.7 in"
+          },
+          "media": {
+            "hero_image": "Series4_BC_1BNF_STD_LSDV.jpg",
+            "gallery": [],
+            "brochures": []
+          }
         }
       }
     },

@@ -87,16 +87,31 @@ TECH_ID_NAMES = [
     "Atom Eve", "Rex Splode", "Dupli Kate", "Cecil Stedman", "Debbie Grayson",
 ]
 
-
 def _generate_tech_id() -> str:
     return random.choice(TECH_ID_NAMES)
+
+
+def _set_tech_id(value: str, *, sync_input: bool = True) -> None:
+    tech_id = str(value or "").strip()
+    if not tech_id:
+        return
+    st.session_state["tech_id"] = tech_id
+    if sync_input:
+        st.session_state["_pending_tech_id_input"] = tech_id
 
 
 def _ensure_tech_id() -> None:
     if st.session_state.get("tech_id"):
         return
     tech_param = str(st.query_params.get("tech") or "").strip()
-    st.session_state["tech_id"] = tech_param or _generate_tech_id()
+    if tech_param:
+        _set_tech_id(tech_param)
+        return
+    last_tech_name = db.get_last_tech_name()
+    if last_tech_name:
+        _set_tech_id(last_tech_name)
+        return
+    st.session_state["tech_id"] = _generate_tech_id()
 
 
 def _validate_session_state() -> None:
@@ -116,7 +131,7 @@ def _validate_session_state() -> None:
         "make_sel", "model_sel", "profile_id",
         "same_weekdays", "weekend_closed", "apply_hours_presets",
         "apply_hours_all_days", "weekday_open_preset", "weekday_close_preset",
-        "hours_quick_template"
+        "hours_quick_template", "tech_id", "tech_id_input",
     }
     
     # Check for orphaned widget keys (form fields that aren't in form_data)
@@ -475,7 +490,7 @@ def apply_draft_payload_to_session(
     if safe_payload.get("profile_id"):
         st.session_state["profile_id"] = safe_payload["profile_id"]
     if safe_payload.get("tech_id"):
-        st.session_state["tech_id"] = safe_payload["tech_id"]
+        _set_tech_id(safe_payload["tech_id"])
 
     st.session_state["form_data"] = form_data
     st.session_state["uploaded_photos"] = list(form_data.get("photos", [])) if isinstance(form_data.get("photos"), list) else []
@@ -500,17 +515,30 @@ def _visibility_state_for_sections(
 # ==================== Sidebar: Draft Management & Export ====================
 with st.sidebar:
     st.title("Survey Management")
-    st.caption(f"Session: {str(st.session_state.get('tech_id', ''))[:8]}")
-    tech_id_input = st.text_input("Your name / tech ID", value=st.session_state.get("tech_id", ""), key="tech_id_input")
-    if tech_id_input.strip() and tech_id_input.strip() != st.session_state.get("tech_id"):
-        st.session_state["tech_id"] = tech_id_input.strip()
+    if st.button("Clear saved name"):
+        st.session_state["_pending_tech_id_input"] = ""
+        st.session_state["tech_id"] = _generate_tech_id()
+
+    pending_tech_id_input = st.session_state.pop("_pending_tech_id_input", None)
+    if pending_tech_id_input is not None:
+        st.session_state["tech_id_input"] = pending_tech_id_input
+    elif "tech_id_input" not in st.session_state:
+        st.session_state["tech_id_input"] = str(st.session_state.get("tech_id", "")).strip()
+
+    tech_id_input = st.text_input("Your name / tech ID", key="tech_id_input")
+    tech_id_value = tech_id_input.strip()
+    current_tech_id = str(st.session_state.get("tech_id", "")).strip()
+    if tech_id_value and tech_id_value != current_tech_id:
+        _set_tech_id(tech_id_value, sync_input=False)
+        db.save_tech_name(tech_id_value)
         if st.session_state.get("survey_id"):
             db.save_draft(
                 st.session_state["survey_id"],
                 build_current_draft_payload(),
                 user_id=st.session_state.get("tech_id", ""),
             )
-        st.rerun()
+
+    st.caption(f"Session: {str(st.session_state.get('tech_id', ''))[:8]}")
     
     # Initialize show_drafts flag if not present
     if "show_drafts" not in st.session_state:
