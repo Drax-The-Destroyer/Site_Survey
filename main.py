@@ -88,6 +88,51 @@ TECH_ID_NAMES = [
     "Atom Eve", "Rex Splode", "Dupli Kate", "Cecil Stedman", "Debbie Grayson",
 ]
 
+BROWSER_SESSION_STORAGE_KEY = "_survey_session_id"
+TECH_NAME_STORAGE_KEY = "tech_name"
+_BROWSER_STORAGE_EMPTY_SENTINEL = "__browser_storage_empty__"
+
+
+def _read_browser_string(script: str, *, empty_sentinel: Optional[str] = None) -> tuple[str, bool]:
+    value = st_javascript(script)
+    if value in (None, False, 0):
+        return "", False
+    if not isinstance(value, str):
+        return "", False
+
+    normalized = value.strip()
+    if normalized == "0":
+        return "", False
+    if empty_sentinel and normalized == empty_sentinel:
+        return "", True
+    return normalized, True
+
+
+def _browser_storage_set(storage_name: str, key: str, value: str) -> None:
+    st_javascript(f"{storage_name}.setItem({json.dumps(key)}, {json.dumps(str(value))})")
+
+
+def _browser_storage_remove(storage_name: str, key: str) -> None:
+    st_javascript(f"{storage_name}.removeItem({json.dumps(key)})")
+
+
+def _ensure_browser_session_id() -> None:
+    existing_browser_uuid, _ = _read_browser_string(
+        f"""
+        (() => {{
+            const value = sessionStorage.getItem({json.dumps(BROWSER_SESSION_STORAGE_KEY)});
+            return value === null ? {json.dumps(_BROWSER_STORAGE_EMPTY_SENTINEL)} : value;
+        }})()
+        """,
+        empty_sentinel=_BROWSER_STORAGE_EMPTY_SENTINEL,
+    )
+
+    if "browser_uuid" not in st.session_state:
+        st.session_state["browser_uuid"] = existing_browser_uuid or str(uuid.uuid4())
+
+    _browser_storage_set("sessionStorage", BROWSER_SESSION_STORAGE_KEY, st.session_state["browser_uuid"])
+
+
 def _generate_tech_id() -> str:
     return random.choice(TECH_ID_NAMES)
 
@@ -112,30 +157,33 @@ def _ensure_tech_id() -> None:
     if "tech_id" not in st.session_state:
         st.session_state["tech_id"] = ""
 
-    browser_user_id = _get_browser_user_id()
     tech_param = str(st.query_params.get("tech") or "").strip()
     if tech_param:
         _set_tech_id(tech_param)
-        if browser_user_id != "unknown":
-            db.save_tech_name(browser_user_id, tech_param)
-            st.session_state["_tech_name_loaded_for_browser_uuid"] = browser_user_id
+        _browser_storage_set("localStorage", TECH_NAME_STORAGE_KEY, tech_param)
+        st.session_state["_tech_name_loaded"] = True
         return
 
-    if browser_user_id == "unknown":
+    if st.session_state.get("_tech_name_loaded"):
         return
 
-    if st.session_state.get("_tech_name_loaded_for_browser_uuid") == browser_user_id:
+    saved_tech_name, storage_resolved = _read_browser_string(
+        f"""
+        (() => {{
+            const value = localStorage.getItem({json.dumps(TECH_NAME_STORAGE_KEY)});
+            return value === null ? {json.dumps(_BROWSER_STORAGE_EMPTY_SENTINEL)} : value;
+        }})()
+        """,
+        empty_sentinel=_BROWSER_STORAGE_EMPTY_SENTINEL,
+    )
+    if not storage_resolved:
         return
 
-    saved_tech_name = db.get_tech_name(browser_user_id)
-    if saved_tech_name:
+    current_tech_id = str(st.session_state.get("tech_id", "")).strip()
+    if saved_tech_name and not current_tech_id:
         _set_tech_id(saved_tech_name)
-    else:
-        current_tech_id = str(st.session_state.get("tech_id", "")).strip()
-        if current_tech_id:
-            db.save_tech_name(browser_user_id, current_tech_id)
 
-    st.session_state["_tech_name_loaded_for_browser_uuid"] = browser_user_id
+    st.session_state["_tech_name_loaded"] = True
 
 
 def _validate_session_state() -> None:
@@ -187,21 +235,7 @@ def _validate_session_state() -> None:
 # st.set_page_config(page_title="Site Survey Form", layout="centered")
 st.set_page_config(page_title="Site Survey Form", layout="wide", initial_sidebar_state="auto")
 
-browser_uuid = st_javascript("""
-    (function() {
-        let uid = localStorage.getItem('survey_browser_uuid');
-        if (!uid) {
-            uid = crypto.randomUUID();
-            localStorage.setItem('survey_browser_uuid', uid);
-        }
-        return uid;
-    })()
-""")
-
-if isinstance(browser_uuid, str):
-    browser_uuid = browser_uuid.strip()
-    if browser_uuid and browser_uuid != "0":
-        st.session_state["browser_uuid"] = browser_uuid
+_ensure_browser_session_id()
 
 st.markdown(
     """
@@ -583,9 +617,10 @@ def _visibility_state_for_sections(
 with st.sidebar:
     st.title("Survey Management")
     if st.button("Clear saved name"):
-        db.delete_tech_name(_get_browser_user_id())
+        _browser_storage_remove("localStorage", TECH_NAME_STORAGE_KEY)
         st.session_state["_pending_tech_id_input"] = ""
-        st.session_state["tech_id"] = ""
+        st.session_state.pop("tech_id", None)
+        st.session_state.pop("_tech_name_loaded", None)
 
     pending_tech_id_input = st.session_state.pop("_pending_tech_id_input", None)
     if pending_tech_id_input is not None:
@@ -599,7 +634,11 @@ with st.sidebar:
     if tech_id_value != current_tech_id:
         _set_tech_id(tech_id_value, sync_input=False)
         if tech_id_value:
-            db.save_tech_name(_get_browser_user_id(), tech_id_value)
+            _browser_storage_set("localStorage", TECH_NAME_STORAGE_KEY, tech_id_value)
+            st.session_state["_tech_name_loaded"] = True
+        else:
+            _browser_storage_remove("localStorage", TECH_NAME_STORAGE_KEY)
+            st.session_state.pop("_tech_name_loaded", None)
         if st.session_state.get("survey_id") and _has_browser_user_id():
             db.save_draft(
                 st.session_state["survey_id"],
@@ -617,11 +656,7 @@ with st.sidebar:
         st.session_state["show_drafts"] = not st.session_state["show_drafts"]
     
     if st.session_state.get("show_drafts"):
-        if not _has_browser_user_id():
-            st.caption("Loading browser session...")
-            drafts = None
-        else:
-            drafts = db.list_drafts(limit=20, user_id=_get_browser_user_id())
+        drafts = db.list_drafts(limit=20, user_id=_get_browser_user_id()) if _has_browser_user_id() else None
         
         if drafts:
             st.markdown("### Recent Drafts")
@@ -955,38 +990,38 @@ else:
     # ==================== Survey Session Management ====================
     # Check if survey_id exists, otherwise look for recent draft or create new
     if "survey_id" not in st.session_state:
-        if not _has_browser_user_id():
-            st.caption("Loading browser session...")
-        else:
-            # Check for recent draft matching this make/model
-            recent_draft_id = db.find_recent_draft(make, model, limit_hours=24, user_id=_get_browser_user_id())
-            
-            if recent_draft_id:
-                # Offer to resume draft
-                st.info(f"Found a recent draft for {make} {model}")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Resume Draft"):
-                        loaded_data = db.load_draft(recent_draft_id, user_id=_get_browser_user_id())
-                        if loaded_data and apply_draft_payload_to_session(
-                            loaded_data,
-                            survey_id_override=recent_draft_id,
-                            restore_selection=False,
-                        ):
-                            logger.info(f"Resumed draft", extra={"survey_id": recent_draft_id})
-                            st.success("Draft loaded! Scroll down to continue.")
-                            st.rerun()
-                with col2:
-                    if st.button("Start Fresh"):
-                        st.session_state["survey_id"] = str(uuid.uuid4())
-                        st.session_state["last_autosave"] = 0
-                        logger.info(f"Started new survey", extra={"survey_id": st.session_state["survey_id"]})
+        recent_draft_id = (
+            db.find_recent_draft(make, model, limit_hours=24, user_id=_get_browser_user_id())
+            if _has_browser_user_id()
+            else None
+        )
+        
+        if recent_draft_id:
+            # Offer to resume draft
+            st.info(f"Found a recent draft for {make} {model}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Resume Draft"):
+                    loaded_data = db.load_draft(recent_draft_id, user_id=_get_browser_user_id())
+                    if loaded_data and apply_draft_payload_to_session(
+                        loaded_data,
+                        survey_id_override=recent_draft_id,
+                        restore_selection=False,
+                    ):
+                        logger.info(f"Resumed draft", extra={"survey_id": recent_draft_id})
+                        st.success("Draft loaded! Scroll down to continue.")
                         st.rerun()
-            else:
-                # No recent draft, create new survey ID
-                st.session_state["survey_id"] = str(uuid.uuid4())
-                st.session_state["last_autosave"] = 0
-                logger.info(f"Created new survey", extra={"survey_id": st.session_state["survey_id"]})
+            with col2:
+                if st.button("Start Fresh"):
+                    st.session_state["survey_id"] = str(uuid.uuid4())
+                    st.session_state["last_autosave"] = 0
+                    logger.info(f"Started new survey", extra={"survey_id": st.session_state["survey_id"]})
+                    st.rerun()
+        else:
+            # No recent draft, create new survey ID
+            st.session_state["survey_id"] = str(uuid.uuid4())
+            st.session_state["last_autosave"] = 0
+            logger.info(f"Created new survey", extra={"survey_id": st.session_state["survey_id"]})
 
 profile_options = get_profiles_for_category(qdef, category_key) if category_key else []
 if profile_options:

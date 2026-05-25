@@ -103,7 +103,7 @@
             "height": "781 mm / 30.75 in"
           },
           "media": {
-            "hero_image": "Series4_BC_2BNF_STD_LSDV_WTV-N.png",
+            "hero_image": "S4_2SNF_STD_Tube_Vend.jpg",
             "gallery": [],
             "brochures": []
           }
@@ -149,6 +149,21 @@
           },
           "media": {
             "hero_image": "Series4_BC_1BNF_STD_LSDV.jpg",
+            "gallery": [],
+            "brochures": []
+          }
+        },
+        "series_4_2snf_std_lsdv": {
+          "label": "Series 4 2SNF STD LSDV",
+          "category": "smart_safe",
+          "dimensions": {
+            "weight": "68 kg / 150 lb",
+            "width": "311 mm / 12.2 in",
+            "depth": "584 mm / 23.0 in",
+            "height": "781 mm / 30.7 in"
+          },
+          "media": {
+            "hero_image": "Tidel-S4-S4e-2SNF_StorageVault_STD.jpg",
             "gallery": [],
             "brochures": []
           }
